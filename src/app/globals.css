@@ -1,26 +1,194 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ---------------------------------------------------------------------------
+   Berry Pop — her existing warm identity (wine, rust, blush) as the base, with
+   green and yellow grafted on as the pops. Green and yellow are the two hues
+   that extend a warm scheme; a cold pink or cyan would read as a different
+   brand.
+
+   Contrast rule: butter, pistachio, tangerine and blush all fail WCAG AA as
+   small text on cream. They are backgrounds, fills and display-size type only.
+   Body copy is always ink-on-cream or cream-on-wine.
+--------------------------------------------------------------------------- */
+
+@theme {
+  --color-wine: #6e1b2e;
+  --color-wine-deep: #4a1220;
+  --color-wine-soft: #f3e2e5;
+
+  --color-rust: #b0532c;
+  --color-rust-soft: #f7e3d8;
+
+  --color-tangerine: #ee8a4f;
+  --color-butter: #f2c14e;
+  --color-pistachio: #8fbf6b;
+
+  --color-blush: #f7dcd8;
+  --color-blush-deep: #efc3bd;
+
+  --color-cream: #fdf6ef;
+  --color-cream-deep: #f6e9dc;
+
+  --color-ink: #2a1a1c;
+  --color-ink-soft: #6b5457;
+
+  --radius-blob: 2rem;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-butter);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-rust);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* --- Accent binding ------------------------------------------------------
+   Category colour arrives as data, so it cannot be a Tailwind class name.
+   Each `.accent-*` sets three variables that components read through
+   `bg-(--accent)` etc. `--accent-on` is picked to clear AA against `--accent`.
+------------------------------------------------------------------------- */
+
+.accent-wine {
+  --accent: var(--color-wine);
+  --accent-on: var(--color-cream);
+  --accent-soft: var(--color-wine-soft);
+}
+.accent-rust {
+  --accent: var(--color-rust);
+  --accent-on: var(--color-cream);
+  --accent-soft: var(--color-rust-soft);
+}
+.accent-butter {
+  --accent: var(--color-butter);
+  --accent-on: var(--color-ink);
+  --accent-soft: #fcf0d6;
+}
+.accent-pistachio {
+  --accent: var(--color-pistachio);
+  --accent-on: #1e2a17;
+  --accent-soft: #e7f2de;
+}
+.accent-tangerine {
+  --accent: var(--color-tangerine);
+  --accent-on: var(--color-ink);
+  --accent-soft: #fbe5d6;
+}
+.accent-blush {
+  --accent: var(--color-blush);
+  --accent-on: var(--color-wine);
+  --accent-soft: #fdefec;
+}
+
+/* --- The scallop ---------------------------------------------------------
+   Her Instagram menu cards are framed in a scalloped cloud border. Rebuilt
+   here in pure CSS: a grid of circles tiled half a step outside the box,
+   unioned with a solid content-box fill. No images, fully responsive.
+------------------------------------------------------------------------- */
+
+.scallop {
+  --scallop: 24px;
+  padding: calc(var(--scallop) / 2);
+  -webkit-mask:
+    radial-gradient(circle closest-side, #000 98%, #0000) calc(var(--scallop) / -2)
+      calc(var(--scallop) / -2) / var(--scallop) var(--scallop) round,
+    linear-gradient(#000 0 0) content-box;
+  mask:
+    radial-gradient(circle closest-side, #000 98%, #0000) calc(var(--scallop) / -2)
+      calc(var(--scallop) / -2) / var(--scallop) var(--scallop) round,
+    linear-gradient(#000 0 0) content-box;
+}
+
+/* --- Motion --------------------------------------------------------------
+   Scroll reveals run on the view() timeline — no JavaScript, no library.
+   Where the timeline is unsupported the rule never applies and content is
+   simply visible, which is the correct fallback.
+------------------------------------------------------------------------- */
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 22%;
+    }
+  }
+}
+
+@keyframes marquee-drift {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-drift 38s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+@keyframes slow-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.slow-spin {
+  animation: slow-spin 26s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slow-spin {
+    animation: none;
+  }
+}
+
+/* Display type wants the optical-size and softness axes pushed warm. */
+.font-display {
+  font-variation-settings:
+    "SOFT" 42,
+    "WONK" 1,
+    "opsz" 120;
 }
