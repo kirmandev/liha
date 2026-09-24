@@ -23,6 +23,14 @@
   --color-butter: #f2c14e;
   --color-pistachio: #8fbf6b;
 
+  /* Added for the ten-category catalogue. Both are dark enough to clear AA as
+     small text on cream, so unlike butter/pistachio/tangerine they may carry
+     type as well as fill. */
+  --color-cocoa: #5b3a2e;
+  --color-cocoa-soft: #f0e2da;
+  --color-plum: #7a3f5c;
+  --color-plum-soft: #f7e3ed;
+
   --color-blush: #f7dcd8;
   --color-blush-deep: #efc3bd;
 
@@ -103,6 +111,38 @@ body {
   --accent: var(--color-blush);
   --accent-on: var(--color-wine);
   --accent-soft: #fdefec;
+}
+.accent-cocoa {
+  --accent: var(--color-cocoa);
+  --accent-on: var(--color-cream);
+  --accent-soft: var(--color-cocoa-soft);
+}
+.accent-plum {
+  --accent: var(--color-plum);
+  --accent-on: var(--color-cream);
+  --accent-soft: var(--color-plum-soft);
+}
+
+/* --- Photography ---------------------------------------------------------
+   The catalogue is now photo-led. Product shots are square-cropped on a warm
+   tint, so a photo with a pale background still reads as a card rather than
+   bleeding into the page. The zoom is on the image alone, inside `overflow-
+   hidden`, so the card's own corners stay put.
+------------------------------------------------------------------------- */
+
+.photo-frame {
+  background: var(--color-cream-deep);
+  overflow: hidden;
+}
+
+.photo-zoom {
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .group:hover .photo-zoom {
+    transform: scale(1.06);
+  }
 }
 
 /* --- The scallop ---------------------------------------------------------

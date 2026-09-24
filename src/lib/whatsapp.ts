@@ -39,6 +39,29 @@ export type OrderPayload =
       date?: string;
       quantity: string;
       details?: string;
+    }
+  | {
+      kind: "cartOrder";
+      reference: string;
+      name: string;
+      phone: string;
+      address: string;
+      /** Human label, e.g. "JazzCash". */
+      paymentMethod: string;
+      note?: string;
+      discountCode?: string;
+      items: Array<{
+        name: string;
+        qty: number;
+        /** Names of the sauces added to this line. */
+        addOns: string[];
+        /** PKR for the whole line, add-ons included. */
+        total: number;
+      }>;
+      subtotal: number;
+      taxRatePercent: number;
+      tax: number;
+      total: number;
     };
 
 /**
@@ -97,6 +120,36 @@ export function composeMessage(payload: OrderPayload): string {
         payload.details && "",
         payload.details && `Details: ${payload.details}`,
       );
+
+    // The whole checkout, written out so staff can work the order straight from
+    // the chat without opening anything else. This message *is* the order record
+    // until a backend exists, so nothing the customer entered is summarised away.
+    case "cartOrder":
+      return lines(
+        `Hi ${site.name}! I'd like to place this order from your website.`,
+        "",
+        `Ref: ${payload.reference}`,
+        "",
+        ...payload.items.map((item) =>
+          lines(
+            `• ${item.qty} × ${item.name} — ${formatPKR(item.total)}`,
+            item.addOns.length > 0 && `  with ${item.addOns.join(", ")}`,
+          ),
+        ),
+        "",
+        `Subtotal: ${formatPKR(payload.subtotal)}`,
+        payload.taxRatePercent > 0 && `Tax (${payload.taxRatePercent}%): ${formatPKR(payload.tax)}`,
+        `Total: ${formatPKR(payload.total)}`,
+        "",
+        `Name: ${payload.name}`,
+        `Phone: ${payload.phone}`,
+        `Address: ${payload.address}`,
+        `Paying by: ${payload.paymentMethod}`,
+        payload.discountCode && `Discount code: ${payload.discountCode}`,
+        payload.note && `Note: ${payload.note}`,
+        "",
+        "Please confirm the delivery charge and send the payment details.",
+      );
   }
 }
 
@@ -110,6 +163,7 @@ const SUBJECTS: Record<OrderPayload["kind"], string> = {
   product: "Menu order",
   custom: "Custom cake enquiry",
   corporate: "Corporate & events enquiry",
+  cartOrder: "Website order",
 };
 
 /**

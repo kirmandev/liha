@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 
+import { allProducts } from "@/content/menu";
 import { site } from "@/content/site";
 
 const ROUTES = [
@@ -10,12 +11,26 @@ const ROUTES = [
   { path: "/about", priority: 0.6 },
 ];
 
+/**
+ * Cart, checkout and order-confirmation are deliberately absent: they are
+ * per-visitor pages with nothing to index, and each carries `robots: noindex`.
+ */
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
-  return ROUTES.map((route) => ({
+
+  const pages = ROUTES.map((route) => ({
     url: `${site.url}${route.path}`,
     lastModified,
-    changeFrequency: "monthly",
+    changeFrequency: "monthly" as const,
     priority: route.priority,
   }));
+
+  const products = allProducts.map((product) => ({
+    url: `${site.url}/product/${product.slug}`,
+    lastModified,
+    changeFrequency: "weekly" as const,
+    priority: 0.8,
+  }));
+
+  return [...pages, ...products];
 }

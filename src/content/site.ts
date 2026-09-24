@@ -72,7 +72,53 @@ export const site = {
     formerly: "Five-star resorts, UAE",
     now: "Faisal Town, Lahore",
   },
+
+  /**
+   * Checkout settings. Every number here is a policy decision, not a constant —
+   * kept in one place so changing it is one edit, and so the values the SRS only
+   * *recommends* are visibly distinguishable from the ones it confirms.
+   */
+  commerce: {
+    /** SRS §9 recommends Rs 500 as a starting default. TODO: confirm with owner. */
+    minOrderValue: 500,
+    /** SRS §9: LIHA contributes a fixed amount; the customer covers the rest. Confirmed. */
+    deliverySubsidy: 100,
+    /**
+     * SRS §5 wants checkout built tax-ready with an admin-configurable rate that
+     * defaults to off, pending advice on Punjab Sales Tax on Services. A tax line
+     * appears only when this is greater than zero.
+     */
+    taxRatePercent: 0,
+    /**
+     * TODO: owner to provide the actual account details (SRS §13). Until then the
+     * checkout tells the customer staff will send them rather than showing a
+     * number we invented.
+     */
+    payment: {
+      jazzCashNumber: null as string | null,
+      bankAccount: null as { bank: string; title: string; number: string } | null,
+    },
+  },
 } as const;
+
+export type PaymentMethod = "jazzcash" | "bank";
+
+export const PAYMENT_METHODS: ReadonlyArray<{
+  id: PaymentMethod;
+  label: string;
+  hint: string;
+}> = [
+  {
+    id: "jazzcash",
+    label: "JazzCash",
+    hint: "Send the amount to our JazzCash number, then share the screenshot.",
+  },
+  {
+    id: "bank",
+    label: "Bank transfer",
+    hint: "Transfer to our account, then share the screenshot.",
+  },
+];
 
 export const NAV_LINKS = [
   { href: "/menu", label: "Menu" },
