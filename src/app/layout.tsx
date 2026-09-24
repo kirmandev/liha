@@ -60,7 +60,7 @@ function StructuredData() {
     description: site.shortDescription,
     url: site.url,
     telephone: site.phone.intl,
-    priceRange: "Rs 300–1250",
+    priceRange: "Rs 120–1299",
     servesCuisine: "Bakery, Desserts, Patisserie",
     address: {
       "@type": "PostalAddress",

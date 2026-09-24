@@ -2,18 +2,13 @@
 
 import { useMemo, useState } from "react";
 
-import { categories, type Category } from "@/content/menu";
-import { site } from "@/content/site";
-import { formatPKR } from "@/lib/format";
-import { buildWhatsAppUrl } from "@/lib/whatsapp";
-import { CATEGORY_ART, LineArt } from "./LineArt";
-import { ScallopFrame } from "./ScallopFrame";
-import { WhatsAppIcon } from "./ui";
+import { categories, priceRange, type Category } from "@/content/menu";
+import { ProductCard } from "./ProductCard";
 
 /**
- * The catalogue with a category filter. Owns filter state and nothing else —
- * the data comes from `content/menu.ts` and the message text from
- * `lib/whatsapp.ts`.
+ * The catalogue as a photo grid with a category filter. Owns filter state and
+ * nothing else — the data comes from `content/menu.ts`, the card markup from
+ * `ProductCard`, and adding to the cart happens on the detail page.
  */
 export function MenuBrowser() {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -25,23 +20,31 @@ export function MenuBrowser() {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by category">
-        <FilterChip active={activeId === null} onClick={() => setActiveId(null)} accent="wine">
-          Everything
-        </FilterChip>
-        {categories.map((category) => (
-          <FilterChip
-            key={category.id}
-            active={activeId === category.id}
-            onClick={() => setActiveId(category.id)}
-            accent={category.accent}
-          >
-            {category.name}
+      <div
+        className="sticky top-[73px] z-30 -mx-5 border-b border-wine/10 bg-cream/92 px-5 py-3 backdrop-blur-md sm:-mx-8 sm:px-8"
+        role="group"
+        aria-label="Filter by category"
+      >
+        {/* Horizontal scroll rather than wrapping: eleven chips would otherwise
+            push the first row of photographs off a phone screen entirely. */}
+        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <FilterChip active={activeId === null} onClick={() => setActiveId(null)} accent="wine">
+            Everything
           </FilterChip>
-        ))}
+          {categories.map((category) => (
+            <FilterChip
+              key={category.id}
+              active={activeId === category.id}
+              onClick={() => setActiveId(category.id)}
+              accent={category.accent}
+            >
+              {category.name}
+            </FilterChip>
+          ))}
+        </div>
       </div>
 
-      <div className="mt-14 flex flex-col gap-20">
+      <div className="mt-12 flex flex-col gap-20">
         {shown.map((category) => (
           <CategorySection key={category.id} category={category} />
         ))}
@@ -66,7 +69,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`accent-${accent} rounded-full border-2 px-4 py-2 text-sm font-semibold transition-colors ${
+      className={`accent-${accent} shrink-0 whitespace-nowrap rounded-full border-2 px-4 py-2 text-sm font-semibold transition-colors ${
         active
           ? "border-transparent bg-(--accent) text-(--accent-on)"
           : "border-wine/20 text-ink hover:border-(--accent) hover:bg-(--accent-soft)"
@@ -78,86 +81,35 @@ function FilterChip({
 }
 
 function CategorySection({ category }: { category: Category }) {
+  const range = priceRange(category);
+
   return (
     <section
       id={category.id}
-      className={`accent-${category.accent} scroll-mt-28`}
+      className={`accent-${category.accent} scroll-mt-36`}
       aria-labelledby={`${category.id}-heading`}
     >
-      <div className="flex flex-wrap items-end justify-between gap-6 border-b-2 border-(--accent) pb-5">
-        <div className="flex items-center gap-4">
-          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-(--accent) text-(--accent-on)">
-            <LineArt art={CATEGORY_ART[category.id] ?? "layerCake"} className="size-9" strokeWidth={2.6} />
-          </span>
-          <div>
-            <h2
-              id={`${category.id}-heading`}
-              className="font-display text-3xl font-semibold text-wine sm:text-4xl"
-            >
-              {category.name}
-            </h2>
-            <p className="mt-1 max-w-xl text-ink-soft">{category.blurb}</p>
-          </div>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b-2 border-(--accent) pb-4">
+        <div>
+          <h2
+            id={`${category.id}-heading`}
+            className="font-display text-3xl font-semibold text-wine sm:text-4xl"
+          >
+            {category.name}
+          </h2>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">{category.blurb}</p>
         </div>
+        {range ? (
+          <span className="rounded-full bg-(--accent-soft) px-3 py-1.5 text-xs font-bold text-ink">
+            {range}
+          </span>
+        ) : null}
       </div>
 
-      <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="mt-8 grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-4">
         {category.items.map((item) => (
-          <li key={`${category.id}-${item.id}`}>
-            <ScallopFrame size={18} className="h-full bg-(--accent-soft)">
-              <div className="flex h-full flex-col gap-4 px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-display text-xl font-semibold leading-snug text-wine">
-                      {item.name}
-                    </h3>
-                    {item.note ? (
-                      <p className="mt-1 text-sm text-ink-soft">{item.note}</p>
-                    ) : null}
-                  </div>
-                  {item.price != null ? (
-                    <span className="shrink-0 rounded-full bg-(--accent) px-3 py-1 text-sm font-bold text-(--accent-on)">
-                      {formatPKR(item.price)}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="mt-auto flex flex-wrap gap-2">
-                  {category.orderVia === "foodpanda" ? (
-                    <a
-                      href={site.foodpanda.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-full bg-wine px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-wine-deep"
-                    >
-                      Order on Foodpanda
-                    </a>
-                  ) : (
-                    <a
-                      href="/custom"
-                      className="rounded-full bg-wine px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-wine-deep"
-                    >
-                      Start a brief
-                    </a>
-                  )}
-                  <a
-                    href={buildWhatsAppUrl({
-                      kind: "product",
-                      product: item.name,
-                      category: category.name,
-                      price: item.price,
-                      note: item.note,
-                    })}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-wine/25 px-4 py-2 text-xs font-semibold text-wine transition-colors hover:border-wine"
-                  >
-                    <WhatsAppIcon className="size-3.5" />
-                    Message
-                  </a>
-                </div>
-              </div>
-            </ScallopFrame>
+          <li key={item.slug}>
+            <ProductCard product={{ ...item, category }} />
           </li>
         ))}
       </ul>

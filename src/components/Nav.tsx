@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { NAV_LINKS, site } from "@/content/site";
+import { CartButton } from "./CartButton";
 import { Wordmark } from "./Wordmark";
 import { ButtonLink, InstagramIcon } from "./ui";
 
@@ -55,7 +56,8 @@ export function Nav() {
           })}
         </ul>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-2 md:flex">
+          <CartButton />
           <a
             href={site.instagram.url}
             target="_blank"
@@ -65,11 +67,13 @@ export function Nav() {
           >
             <InstagramIcon />
           </a>
-          <ButtonLink href="/custom" variant="wine" className="px-5 py-2.5">
-            Order a cake
+          <ButtonLink href="/menu" variant="wine" className="ml-1 px-5 py-2.5">
+            Order now
           </ButtonLink>
         </div>
 
+        <div className="flex items-center gap-1 md:hidden">
+          <CartButton />
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
@@ -82,6 +86,7 @@ export function Nav() {
             {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
           </svg>
         </button>
+        </div>
       </nav>
 
       <div
@@ -104,7 +109,10 @@ export function Nav() {
           ))}
         </ul>
         <div className="mt-6 flex flex-col gap-3">
-          <ButtonLink href="/custom" variant="wine" onClick={close}>
+          <ButtonLink href="/menu" variant="wine" onClick={close}>
+            Browse the menu
+          </ButtonLink>
+          <ButtonLink href="/custom" variant="outline" onClick={close}>
             Order a custom cake
           </ButtonLink>
           <ButtonLink href={site.instagram.url} external variant="outline">
