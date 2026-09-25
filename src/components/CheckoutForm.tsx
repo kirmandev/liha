@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { PAYMENT_METHODS, site, type PaymentMethod } from "@/content/site";
 import { useCart } from "@/lib/cart";
+import { useCatalogue } from "@/lib/catalogue-context";
 import { formatPKR } from "@/lib/format";
 import { storeSubmittedOrder } from "@/lib/orderHandoff";
 import { submitOrder, validateDraft, type OrderDraft } from "@/lib/order";
@@ -22,6 +23,7 @@ import { Button, ButtonLink } from "./ui";
  */
 export function CheckoutForm() {
   const { resolved, totals, hydrated, clear } = useCart();
+  const { settings } = useCatalogue();
   const router = useRouter();
 
   const [name, setName] = useState("");
@@ -190,13 +192,13 @@ export function CheckoutForm() {
 
           {selected ? (
             <p className="mt-4 rounded-xl bg-cream-deep/70 px-4 py-3 text-sm text-ink-soft">
-              {/* The real account details are not on file yet (SRS §13 has LIHA
-                  supplying them). Saying so beats printing a placeholder number
-                  someone might actually transfer money to. */}
-              {paymentMethod === "jazzcash" && site.commerce.payment.jazzCashNumber
-                ? `Send to ${site.commerce.payment.jazzCashNumber} and share the screenshot.`
-                : paymentMethod === "bank" && site.commerce.payment.bankAccount
-                  ? `Transfer to ${site.commerce.payment.bankAccount.bank}, ${site.commerce.payment.bankAccount.title} — ${site.commerce.payment.bankAccount.number}.`
+              {/* Account details come from the admin. While they are unset the
+                  site says staff will send them, rather than printing a
+                  placeholder someone might actually transfer money to. */}
+              {paymentMethod === "jazzcash" && settings.jazzCashNumber
+                ? `Send to ${settings.jazzCashNumber} and share the screenshot.`
+                : paymentMethod === "bank" && settings.bankAccount
+                  ? `Transfer to ${settings.bankAccount.bank}, ${settings.bankAccount.title} — ${settings.bankAccount.number}.`
                   : `We will send you the ${selected.label.toLowerCase()} details on WhatsApp as soon as the order comes through.`}
             </p>
           ) : null}
@@ -268,7 +270,7 @@ export function CheckoutForm() {
         </dl>
 
         <p className="mt-4 text-xs leading-relaxed text-ink-soft">
-          Delivery depends on your area — LIHA covers {formatPKR(site.commerce.deliverySubsidy)} of
+          Delivery depends on your area — LIHA covers {formatPKR(settings.deliverySubsidy)} of
           the rider fare and the rest is confirmed with you before dispatch.
         </p>
 

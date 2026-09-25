@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { site } from "@/content/site";
+import { indexProducts } from "./catalogue";
+import { CAKE, SAUCE_A, SLICE, makeCatalogue } from "./fixtures";
 import {
   generateReference,
   paymentMethodLabel,
@@ -10,10 +12,18 @@ import {
 } from "./order";
 import { createLine, orderTotals, resolveLines } from "./pricing";
 
-function draft(overrides: Partial<OrderDraft["customer"]> = {}, slugs = [["matilda-cake", []]] as Array<
-  [string, string[]]
->): OrderDraft {
-  const lines = resolveLines(slugs.map(([slug, addOns]) => createLine(slug, addOns, 1)));
+const catalogue = makeCatalogue();
+const index = indexProducts(catalogue);
+const SETTINGS = { taxRatePercent: 0, minOrderValue: 500 };
+
+function draft(
+  overrides: Partial<OrderDraft["customer"]> = {},
+  slugs = [[CAKE.slug, []]] as Array<[string, string[]]>,
+): OrderDraft {
+  const lines = resolveLines(
+    slugs.map(([slug, addOns]) => createLine(slug, addOns, 1)),
+    index,
+  );
   return {
     customer: {
       name: "Ayesha Khan",
@@ -23,7 +33,7 @@ function draft(overrides: Partial<OrderDraft["customer"]> = {}, slugs = [["matil
       ...overrides,
     },
     lines,
-    totals: orderTotals(lines),
+    totals: orderTotals(lines, SETTINGS),
   };
 }
 
@@ -76,8 +86,8 @@ describe("validateDraft", () => {
   });
 
   it("blocks checkout below the minimum order value", () => {
-    const small = draft({}, [["butter-cake-slice", []]]); // 150
-    expect(validateDraft(small).cart).toContain(String(site.commerce.minOrderValue));
+    const small = draft({}, [[SLICE.slug, []]]); // 150 against a 500 minimum
+    expect(validateDraft(small).cart).toContain("500");
   });
 
   // SRS §7 requires codes to be validated and burned server-side. Until that
@@ -116,8 +126,8 @@ describe("submitOrder", () => {
     const text = decodeURIComponent(order.handoffUrl.split("?text=")[1]);
 
     expect(text).toContain(order.reference);
-    expect(text).toContain("1 × Matilda Cake");
-    expect(text).toContain("Rs 699");
+    expect(text).toContain(`1 × ${CAKE.name}`);
+    expect(text).toContain("Rs 700");
     expect(text).toContain("Ayesha Khan");
     expect(text).toContain("House 12, Street 4, Faisal Town, Lahore");
     expect(text).toContain("JazzCash");
@@ -125,14 +135,10 @@ describe("submitOrder", () => {
   });
 
   it("names each add-on on its line", () => {
-    const order = submitOrder(
-      draft({}, [["matilda-cake", ["milk-chocolate-sauce"]]]),
-      at,
-      fixed,
-    );
+    const order = submitOrder(draft({}, [[CAKE.slug, [SAUCE_A.slug]]]), at, fixed);
     const text = decodeURIComponent(order.handoffUrl.split("?text=")[1]);
-    expect(text).toContain("with Milk Chocolate Sauce");
-    expect(text).toContain("Rs 819"); // 699 + 120
+    expect(text).toContain(`with ${SAUCE_A.name}`);
+    expect(text).toContain("Rs 820"); // 700 + 120
   });
 
   it("omits the tax line entirely while the rate is off", () => {

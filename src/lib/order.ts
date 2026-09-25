@@ -11,7 +11,7 @@
  * know nothing about the transport behind it.
  */
 
-import { PAYMENT_METHODS, site, type PaymentMethod } from "@/content/site";
+import { PAYMENT_METHODS, type PaymentMethod } from "@/content/site";
 import type { OrderTotals, ResolvedLine } from "./pricing";
 import { buildWhatsAppUrl } from "./whatsapp";
 
@@ -94,7 +94,7 @@ export function validateDraft(draft: OrderDraft): Record<string, string> {
   if (draft.lines.length === 0) errors.cart = "Your cart is empty.";
 
   if (!draft.totals.meetsMinimum) {
-    errors.cart = `Minimum order is Rs ${site.commerce.minOrderValue}. Add Rs ${draft.totals.shortOfMinimum} more to check out.`;
+    errors.cart = `Minimum order is Rs ${draft.totals.minOrderValue}. Add Rs ${draft.totals.shortOfMinimum} more to check out.`;
   }
 
   return errors;

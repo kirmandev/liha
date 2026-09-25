@@ -7,8 +7,17 @@ import { Reveal } from "@/components/Reveal";
 import { ScallopFrame } from "@/components/ScallopFrame";
 import { ButtonLink, Eyebrow, InstagramIcon, SectionHeading, WhatsAppIcon } from "@/components/ui";
 import { HOW_IT_WORKS } from "@/content/custom";
-import { findProduct, primaryCategories, priceRange, signatureItems } from "@/content/menu";
 import { site } from "@/content/site";
+import {
+  featuredEntries,
+  findEntry,
+  priceRange,
+  primaryCategories,
+  type Catalogue,
+  type CatalogueCategory,
+  type CatalogueEntry,
+} from "@/lib/catalogue";
+import { getCatalogue } from "@/lib/cms";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
 const MARQUEE_WORDS = [
@@ -25,25 +34,15 @@ const MARQUEE_WORDS = [
 /** The three photographs that carry the hero. */
 const HERO_SLUGS = ["dubai-chocolate-cake-for-one", "brookie", "churros-with-chocolate-sauce"];
 
-/** One representative photograph per category, for the category grid. */
-const CATEGORY_HERO: Record<string, string> = {
-  "flavour-of-the-month": "banoffee-dome",
-  "signature-cakes": "matilda-cake",
-  "brownies-bars": "the-milo-brownie",
-  "shot-boxes": "brownie-shot-box",
-  cookies: "brown-butter-chocolate-chip-cookie",
-  loaves: "chocolate-banana-bread-mini-loaf",
-  "hot-desserts": "churros-with-chocolate-sauce",
-  "signature-combos": "matilda-cookie-shot-box",
-};
+export default async function Home() {
+  const catalogue = await getCatalogue();
 
-export default function Home() {
   return (
     <>
-      <Hero />
+      <Hero catalogue={catalogue} />
       <Marquee />
-      <Categories />
-      <Signatures />
+      <Categories catalogue={catalogue} />
+      <Signatures items={featuredEntries(catalogue)} />
       <CustomCakes />
       <Corporate />
       <Proof />
@@ -51,8 +50,8 @@ export default function Home() {
   );
 }
 
-function Hero() {
-  const [lead, second, third] = HERO_SLUGS.map((slug) => findProduct(slug));
+function Hero({ catalogue }: { catalogue: Catalogue }) {
+  const [lead, second, third] = HERO_SLUGS.map((slug) => findEntry(catalogue, slug));
 
   return (
     <section className="relative overflow-hidden bg-cream px-5 pb-16 pt-14 sm:px-8 sm:pb-24 sm:pt-20">
@@ -126,7 +125,7 @@ function Hero() {
             her Instagram identity survives the move to photography. */}
         <div className="relative mx-auto w-full max-w-lg">
           <div className="grid grid-cols-5 grid-rows-5 gap-3 sm:gap-4">
-            {lead ? (
+            {lead?.image ? (
               <Link
                 href={`/product/${lead.slug}`}
                 className="group col-span-5 row-span-3 sm:col-span-4"
@@ -135,8 +134,8 @@ function Hero() {
                 <ScallopFrame size={26} className="h-full bg-wine" variant="solid">
                   <div className="photo-frame relative h-full min-h-56 w-full">
                     <Image
-                      src={`/products/${lead.slug}.jpg`}
-                      alt={lead.name}
+                      src={lead.image ?? ""}
+                      alt={lead.imageAlt}
                       fill
                       priority
                       sizes="(min-width: 1024px) 40vw, 90vw"
@@ -147,7 +146,7 @@ function Hero() {
               </Link>
             ) : null}
 
-            {second ? (
+            {second?.image ? (
               <Link
                 href={`/product/${second.slug}`}
                 className="group col-span-2 row-span-2 sm:col-span-2"
@@ -155,8 +154,8 @@ function Hero() {
               >
                 <div className="photo-frame relative h-full min-h-32 w-full overflow-hidden rounded-2xl">
                   <Image
-                    src={`/products/${second.slug}.jpg`}
-                    alt={second.name}
+                    src={second.image ?? ""}
+                    alt={second.imageAlt}
                     fill
                     priority
                     sizes="30vw"
@@ -166,7 +165,7 @@ function Hero() {
               </Link>
             ) : null}
 
-            {third ? (
+            {third?.image ? (
               <Link
                 href={`/product/${third.slug}`}
                 className="group col-span-3 row-span-2 sm:col-span-2"
@@ -174,8 +173,8 @@ function Hero() {
               >
                 <div className="photo-frame relative h-full min-h-32 w-full overflow-hidden rounded-2xl">
                   <Image
-                    src={`/products/${third.slug}.jpg`}
-                    alt={third.name}
+                    src={third.image ?? ""}
+                    alt={third.imageAlt}
                     fill
                     sizes="30vw"
                     className="photo-zoom object-cover"
@@ -217,7 +216,7 @@ function Marquee() {
   );
 }
 
-function Categories() {
+function Categories({ catalogue }: { catalogue: Catalogue }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
       <Reveal>
@@ -229,53 +228,65 @@ function Categories() {
       </Reveal>
 
       <ul className="mt-14 grid grid-cols-2 gap-x-5 gap-y-9 lg:grid-cols-4">
-        {primaryCategories.map((category) => {
-          const heroSlug = CATEGORY_HERO[category.id];
-          const range = priceRange(category);
-          return (
-            <Reveal as="li" key={category.id}>
-              <Link
-                href={`/menu#${category.id}`}
-                className={`accent-${category.accent} group flex h-full flex-col`}
-              >
-                <div className="photo-frame relative aspect-[4/5] w-full overflow-hidden rounded-2xl">
-                  {heroSlug ? (
-                    <Image
-                      src={`/products/${heroSlug}.jpg`}
-                      alt=""
-                      fill
-                      sizes="(min-width: 1024px) 25vw, 50vw"
-                      className="photo-zoom object-cover"
-                    />
-                  ) : null}
-                  <div
-                    aria-hidden
-                    className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-ink/75 via-ink/25 to-transparent"
-                  />
-                  <div className="absolute inset-x-0 bottom-0 p-4">
-                    <h3 className="font-display text-xl font-semibold leading-tight text-cream">
-                      {category.name}
-                    </h3>
-                    {range ? (
-                      <p className="mt-1 text-xs font-semibold text-cream/85">{range}</p>
-                    ) : null}
-                  </div>
-                  <span
-                    aria-hidden
-                    className="absolute right-3 top-3 size-3 rounded-full bg-(--accent)"
-                  />
-                </div>
-                <p className="mt-3 text-sm leading-relaxed text-ink-soft">{category.blurb}</p>
-              </Link>
-            </Reveal>
-          );
-        })}
+        {primaryCategories(catalogue).map((category) => (
+          <Reveal as="li" key={category.id}>
+            <CategoryCard category={category} />
+          </Reveal>
+        ))}
       </ul>
     </section>
   );
 }
 
-function Signatures() {
+/**
+ * A category tile, fronted by its first product's photograph.
+ *
+ * The representative image is taken from the category rather than a hardcoded
+ * map of slugs: the owner now controls both the categories and the order of
+ * products within them, so any fixed mapping would rot the first time they
+ * rename a section or reorder its items.
+ */
+function CategoryCard({ category }: { category: CatalogueCategory }) {
+  const range = priceRange(category);
+  const cover = category.items.find((item) => item.image);
+
+  return (
+    <Link
+      href={`/menu#${category.slug}`}
+      className={`accent-${category.accent} group flex h-full flex-col`}
+    >
+      <div className="photo-frame relative aspect-[4/5] w-full overflow-hidden rounded-2xl">
+        {cover?.image ? (
+          <Image
+            src={cover.image}
+            alt=""
+            fill
+            sizes="(min-width: 1024px) 25vw, 50vw"
+            className="photo-zoom object-cover"
+          />
+        ) : (
+          <div className="h-full w-full bg-(--accent-soft)" />
+        )}
+        <div
+          aria-hidden
+          className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-ink/75 via-ink/25 to-transparent"
+        />
+        <div className="absolute inset-x-0 bottom-0 p-4">
+          <h3 className="font-display text-xl font-semibold leading-tight text-cream">
+            {category.name}
+          </h3>
+          {range ? <p className="mt-1 text-xs font-semibold text-cream/85">{range}</p> : null}
+        </div>
+        <span aria-hidden className="absolute right-3 top-3 size-3 rounded-full bg-(--accent)" />
+      </div>
+      <p className="mt-3 text-sm leading-relaxed text-ink-soft">{category.blurb}</p>
+    </Link>
+  );
+}
+
+function Signatures({ items }: { items: CatalogueEntry[] }) {
+  if (items.length === 0) return null;
+
   return (
     <section className="bg-blush/45 px-5 py-24 sm:px-8">
       <div className="mx-auto max-w-6xl">
@@ -283,12 +294,12 @@ function Signatures() {
           <SectionHeading
             eyebrow="Start here"
             title="If it is your first order"
-            intro="The four people come back for. Add them straight to your cart."
+            intro="The ones people come back for. Add them straight to your cart."
           />
         </Reveal>
 
         <ul className="mt-14 grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-4">
-          {signatureItems.map((item) => (
+          {items.map((item) => (
             <Reveal as="li" key={item.slug}>
               <ProductCard product={item} />
             </Reveal>

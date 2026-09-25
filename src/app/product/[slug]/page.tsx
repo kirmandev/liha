@@ -6,58 +6,63 @@ import { notFound } from "next/navigation";
 import { AddToCart } from "@/components/AddToCart";
 import { ProductCard } from "@/components/ProductCard";
 import { ButtonLink, Eyebrow } from "@/components/ui";
-import { allProducts, findProduct, productImage, sauceAddOns } from "@/content/menu";
 import { site } from "@/content/site";
+import { allEntries, findEntry, sauceAddOns } from "@/lib/catalogue";
+import { CmsUnavailableError, getCatalogue } from "@/lib/cms";
 import { formatPKR } from "@/lib/format";
-import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
-export function generateStaticParams() {
-  return allProducts.map((product) => ({ slug: product.slug }));
-}
+/**
+ * Products live in the CMS now, so there is no build-time list to prerender.
+ * The page is rendered on demand and cached; the CMS purges that cache on
+ * publish, so an edit is live in seconds rather than at the next deploy.
+ */
+export const revalidate = 300;
 
 export async function generateMetadata({
   params,
 }: PageProps<"/product/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const product = findProduct(slug);
+
+  let product;
+  try {
+    product = findEntry(await getCatalogue(), slug);
+  } catch (error) {
+    if (!(error instanceof CmsUnavailableError)) throw error;
+    return { title: "Menu" };
+  }
+
   if (!product) return { title: "Not found" };
 
-  const image = productImage(product);
+  const description = (product.metaDescription ?? product.description).slice(0, 155);
+
   return {
-    title: product.name,
-    description: product.description.slice(0, 155),
+    title: product.metaTitle ?? product.name,
+    description,
     alternates: { canonical: `/product/${product.slug}` },
     openGraph: {
       title: `${product.name} — ${site.fullName}`,
-      description: product.description.slice(0, 155),
+      description,
       url: `/product/${product.slug}`,
-      images: image ? [{ url: image, width: 1200, height: 1200, alt: product.name }] : undefined,
+      images: product.image
+        ? [{ url: product.image, width: 1200, height: 1200, alt: product.imageAlt }]
+        : undefined,
     },
   };
 }
 
 export default async function ProductPage({ params }: PageProps<"/product/[slug]">) {
   const { slug } = await params;
-  const product = findProduct(slug);
+  const catalogue = await getCatalogue();
+  const product = findEntry(catalogue, slug);
   if (!product) notFound();
 
-  const image = productImage(product);
-  const isCustom = product.category.orderVia === "whatsapp";
+  const sauces = sauceAddOns(catalogue);
 
-  // Flattened before crossing the client boundary — see AddToCart's note.
-  const sauceOptions = sauceAddOns.map((sauce) => ({
-    slug: sauce.slug,
-    name: sauce.name,
-    price: sauce.price ?? 0,
-  }));
-
-  // Siblings first, then anything else, so "more like this" is genuinely like this.
-  const related = allProducts
+  // Siblings first, so "more like this" is genuinely like this. The product
+  // itself is excluded, and so are the sauces when viewing a sauce.
+  const related = allEntries(catalogue)
     .filter(
-      (entry) =>
-        entry.slug !== product.slug &&
-        entry.category.id === product.category.id &&
-        entry.price != null,
+      (entry) => entry.slug !== product.slug && entry.category.id === product.category.id,
     )
     .slice(0, 4);
 
@@ -73,7 +78,7 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
             </li>
             <li aria-hidden>/</li>
             <li>
-              <Link href={`/menu#${product.category.id}`} className="hover:text-wine">
+              <Link href={`/menu#${product.category.slug}`} className="hover:text-wine">
                 {product.category.name}
               </Link>
             </li>
@@ -82,10 +87,10 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
 
         <div className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 lg:grid-cols-2 lg:gap-16 lg:py-16">
           <div className="photo-frame relative aspect-square w-full overflow-hidden rounded-3xl">
-            {image ? (
+            {product.image ? (
               <Image
-                src={image}
-                alt={product.name}
+                src={product.image}
+                alt={product.imageAlt}
                 fill
                 priority
                 sizes="(min-width: 1024px) 50vw, 100vw"
@@ -94,7 +99,7 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
             ) : (
               <div className="flex h-full items-center justify-center bg-(--accent-soft) px-10 text-center">
                 <span className="font-display text-3xl font-semibold text-wine">
-                  Made to your brief
+                  Photograph coming
                 </span>
               </div>
             )}
@@ -114,32 +119,34 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
             ) : null}
 
             <p className="font-display mt-5 text-3xl font-semibold text-rust">
-              {product.price != null ? formatPKR(product.price) : "Quoted to your brief"}
+              {formatPKR(product.price)}
             </p>
 
             <p className="mt-6 leading-relaxed text-ink-soft">{product.description}</p>
 
             <div className="mt-9">
-              {isCustom ? (
-                <div className="flex flex-wrap gap-3">
-                  <ButtonLink href="/custom" variant="wine" className="px-7 py-3.5">
-                    Start a brief
-                  </ButtonLink>
-                  <ButtonLink
-                    href={buildWhatsAppUrl({ kind: "general" })}
-                    external
-                    variant="outline"
-                  >
-                    Message on WhatsApp
-                  </ButtonLink>
-                </div>
-              ) : (
+              {product.available ? (
                 <AddToCart
                   slug={product.slug}
-                  price={product.price ?? 0}
+                  price={product.price}
                   pairsWithSauces={product.pairsWithSauces}
-                  sauces={sauceOptions}
+                  sauces={sauces.map((sauce) => ({
+                    slug: sauce.slug,
+                    name: sauce.name,
+                    price: sauce.price,
+                  }))}
                 />
+              ) : (
+                <div>
+                  <p className="rounded-xl bg-butter/30 px-4 py-3 text-sm font-semibold text-ink">
+                    Sold out for today. It will be back — everything is baked fresh each morning.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <ButtonLink href="/menu" variant="wine">
+                      See what is available
+                    </ButtonLink>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -147,8 +154,9 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
               <div>
                 <dt className="font-semibold text-ink">Delivery</dt>
                 <dd className="mt-1 text-ink-soft">
-                  Across {site.address.city}. LIHA covers {formatPKR(site.commerce.deliverySubsidy)}{" "}
-                  of the rider fare; the rest is confirmed with you before dispatch.
+                  Across {site.address.city}. LIHA covers{" "}
+                  {formatPKR(catalogue.settings.deliverySubsidy)} of the rider fare; the rest is
+                  confirmed with you before dispatch.
                 </dd>
               </div>
               <div>
