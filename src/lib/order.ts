@@ -1,18 +1,19 @@
 /**
  * Order submission — the seam between checkout and wherever orders actually go.
  *
- * Today that is a WhatsApp message to LIHA's number, which is how the business
- * already takes orders: the Website SRS has the site charge nobody (§5, §13),
- * staff phone the customer to confirm payment (§6), and delivery is quoted by
- * hand (§9). Nothing here needs a server.
+ * It now goes to the CMS, which **re-prices the order from its own catalogue**.
+ * This module sends slugs and quantities and never sends a price. The totals
+ * the cart shows exist so the customer can see a number before submitting; the
+ * figures on the saved order are the server's, and if the two ever disagree the
+ * server is right.
  *
- * When order persistence lands, `submitOrder` is the only function that changes.
- * Checkout, the cart and the confirmation page all speak to this interface and
- * know nothing about the transport behind it.
+ * WhatsApp is still how staff are told an order arrived, but it is no longer
+ * the record — the order exists in the admin whether or not the message is
+ * sent. That is the whole point of this phase.
  */
 
 import { PAYMENT_METHODS, type PaymentMethod } from "@/content/site";
-import type { OrderTotals, ResolvedLine } from "./pricing";
+import type { ResolvedLine } from "./pricing";
 import { buildWhatsAppUrl } from "./whatsapp";
 
 export type CustomerDetails = {
@@ -27,56 +28,36 @@ export type CustomerDetails = {
 export type OrderDraft = {
   customer: CustomerDetails;
   lines: ResolvedLine[];
-  totals: OrderTotals;
+  /** What the cart displayed. Sent for nothing; the server computes its own. */
+  totals: { subtotal: number; tax: number; taxRatePercent: number; total: number };
 };
 
-export type SubmittedOrder = {
-  /**
-   * A short reference both sides can quote in the chat. Deliberately *not*
-   * called an order number: without a backend nothing allocates or stores a
-   * sequential one, and presenting a random string as an authoritative order
-   * number would be a promise the site cannot keep.
-   */
+/** What the CMS returns once an order is persisted. */
+export type PlacedOrder = {
   reference: string;
-  placedAt: string;
-  /** Where the customer is sent to actually deliver the order. */
-  handoffUrl: string;
-  draft: OrderDraft;
+  status: string;
+  subtotal: number;
+  tax: number;
+  taxRatePercent: number;
+  total: number;
+  /** Always false for now: codes are recorded and confirmed by staff. */
+  discountApplied: boolean;
+  items: Array<{ name: string; quantity: number; addOns: string[]; lineTotal: number }>;
 };
 
-const REFERENCE_ALPHABET = "ACDEFGHJKLMNPQRTUVWXY349";
+export type SubmitResult =
+  | { ok: true; order: PlacedOrder; handoffUrl: string; duplicate: boolean }
+  | { ok: false; errors: Record<string, string> };
 
 /**
- * `LIHA-240926-K7QF`. Date first so staff can sort a chat backlog by eye;
- * four random characters after, from an alphabet with the glyphs people misread
- * over a phone (0/O, 1/I/L, 5/S, 8/B, 2/Z) removed.
- *
- * `at` and `random` are injected so this is deterministic under test.
+ * Client-side checks, so an obviously incomplete form does not need a round
+ * trip. The server validates everything again — this is for the typing
+ * experience, never for correctness.
  */
-export function generateReference(at: Date = new Date(), random: () => number = Math.random): string {
-  const yy = String(at.getFullYear()).slice(-2);
-  const mm = String(at.getMonth() + 1).padStart(2, "0");
-  const dd = String(at.getDate()).padStart(2, "0");
-  let suffix = "";
-  for (let i = 0; i < 4; i += 1) {
-    suffix += REFERENCE_ALPHABET[Math.floor(random() * REFERENCE_ALPHABET.length)];
-  }
-  return `LIHA-${yy}${mm}${dd}-${suffix}`;
-}
-
-export function paymentMethodLabel(id: PaymentMethod): string {
-  return PAYMENT_METHODS.find((method) => method.id === id)?.label ?? id;
-}
-
-/**
- * Validates a draft, returning field-keyed messages. Empty object means valid.
- *
- * Deliberately not validating the discount code: SRS §7 requires codes to be
- * checked against the backend and burned on redemption. There is no backend
- * yet, and shipping a client-side check would put every valid code in the
- * JavaScript bundle. The field is captured and passed to staff instead.
- */
-export function validateDraft(draft: OrderDraft): Record<string, string> {
+export function validateDraft(
+  draft: OrderDraft,
+  minOrderValue: number,
+): Record<string, string> {
   const errors: Record<string, string> = {};
   const { name, phone, address } = draft.customer;
 
@@ -91,46 +72,127 @@ export function validateDraft(draft: OrderDraft): Record<string, string> {
     errors.address = "Please give a full address, including the area.";
   }
 
-  if (draft.lines.length === 0) errors.cart = "Your cart is empty.";
-
-  if (!draft.totals.meetsMinimum) {
-    errors.cart = `Minimum order is Rs ${draft.totals.minOrderValue}. Add Rs ${draft.totals.shortOfMinimum} more to check out.`;
+  if (draft.lines.length === 0) {
+    errors.cart = "Your cart is empty.";
+  } else if (draft.totals.subtotal < minOrderValue) {
+    errors.cart = `Minimum order is Rs ${minOrderValue}. Add Rs ${
+      minOrderValue - draft.totals.subtotal
+    } more to check out.`;
   }
 
   return errors;
 }
 
+export function paymentMethodLabel(id: PaymentMethod): string {
+  return PAYMENT_METHODS.find((method) => method.id === id)?.label ?? id;
+}
+
 /**
- * Hands the order off. Pure: it composes and returns, it does not navigate —
- * the caller decides when to open the URL, which keeps this testable.
+ * A key that survives retries but not a genuinely new order.
+ *
+ * Generated once per checkout attempt and sent with the order, so a double-tap,
+ * a flaky connection or an impatient refresh cannot create two orders. The
+ * server returns the original instead.
  */
-export function submitOrder(
-  draft: OrderDraft,
-  at: Date = new Date(),
-  random: () => number = Math.random,
-): SubmittedOrder {
-  const reference = generateReference(at, random);
+export function newIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
 
-  const handoffUrl = buildWhatsAppUrl({
-    kind: "cartOrder",
-    reference,
-    name: draft.customer.name.trim(),
-    phone: draft.customer.phone.trim(),
-    address: draft.customer.address.trim(),
-    paymentMethod: paymentMethodLabel(draft.customer.paymentMethod),
-    note: draft.customer.note?.trim() || undefined,
-    discountCode: draft.customer.discountCode?.trim().toUpperCase() || undefined,
+/** The body the CMS expects. Note the absence of any price. */
+function toRequestBody(draft: OrderDraft, idempotencyKey: string) {
+  return {
+    idempotencyKey,
     items: draft.lines.map((entry) => ({
-      name: entry.product.name,
+      slug: entry.product.slug,
       qty: entry.line.qty,
-      addOns: entry.addOns.map((addOn) => addOn.name),
-      total: entry.total,
+      addOns: entry.addOns.map((addOn) => addOn.slug),
     })),
-    subtotal: draft.totals.subtotal,
-    taxRatePercent: draft.totals.taxRatePercent,
-    tax: draft.totals.tax,
-    total: draft.totals.total,
-  });
+    customer: {
+      name: draft.customer.name.trim(),
+      phone: draft.customer.phone.trim(),
+      address: draft.customer.address.trim(),
+      note: draft.customer.note?.trim() || undefined,
+    },
+    paymentMethod: draft.customer.paymentMethod,
+    discountCode: draft.customer.discountCode?.trim().toUpperCase() || undefined,
+  };
+}
 
-  return { reference, placedAt: at.toISOString(), handoffUrl, draft };
+/** The WhatsApp message, built from the server's figures rather than the cart's. */
+export function buildHandoffUrl(order: PlacedOrder, customer: CustomerDetails): string {
+  return buildWhatsAppUrl({
+    kind: "cartOrder",
+    reference: order.reference,
+    name: customer.name.trim(),
+    phone: customer.phone.trim(),
+    address: customer.address.trim(),
+    paymentMethod: paymentMethodLabel(customer.paymentMethod),
+    note: customer.note?.trim() || undefined,
+    discountCode: customer.discountCode?.trim().toUpperCase() || undefined,
+    items: order.items.map((item) => ({
+      name: item.name,
+      qty: item.quantity,
+      addOns: item.addOns,
+      total: item.lineTotal,
+    })),
+    subtotal: order.subtotal,
+    taxRatePercent: order.taxRatePercent,
+    tax: order.tax,
+    total: order.total,
+  });
+}
+
+/**
+ * Places the order.
+ *
+ * Posts to the storefront's own API route rather than the CMS directly, so the
+ * CMS origin and any credentials stay server-side and the browser makes a
+ * same-origin request.
+ */
+export async function submitOrder(
+  draft: OrderDraft,
+  idempotencyKey: string,
+): Promise<SubmitResult> {
+  let response: Response;
+
+  try {
+    response = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(toRequestBody(draft, idempotencyKey)),
+    });
+  } catch {
+    return {
+      ok: false,
+      errors: {
+        cart: "We could not reach the kitchen just now. Please check your connection and try again.",
+      },
+    };
+  }
+
+  let payload: Record<string, unknown> = {};
+  try {
+    payload = (await response.json()) as Record<string, unknown>;
+  } catch {
+    // Fall through to the status-based message below.
+  }
+
+  if (!response.ok) {
+    const errors = payload.errors as Record<string, string> | undefined;
+    if (errors && Object.keys(errors).length > 0) return { ok: false, errors };
+    return {
+      ok: false,
+      errors: { cart: "Something went wrong placing your order. Please try again." },
+    };
+  }
+
+  const order = payload as unknown as PlacedOrder & { duplicate?: boolean };
+
+  return {
+    ok: true,
+    order,
+    handoffUrl: buildHandoffUrl(order, draft.customer),
+    duplicate: Boolean(order.duplicate),
+  };
 }

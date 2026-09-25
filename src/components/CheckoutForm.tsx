@@ -9,7 +9,12 @@ import { useCart } from "@/lib/cart";
 import { useCatalogue } from "@/lib/catalogue-context";
 import { formatPKR } from "@/lib/format";
 import { storeSubmittedOrder } from "@/lib/orderHandoff";
-import { submitOrder, validateDraft, type OrderDraft } from "@/lib/order";
+import {
+  newIdempotencyKey,
+  submitOrder,
+  validateDraft,
+  type OrderDraft,
+} from "@/lib/order";
 import { Field, TextArea, TextInput } from "./FormControls";
 import { Button, ButtonLink } from "./ui";
 
@@ -34,6 +39,9 @@ export function CheckoutForm() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("jazzcash");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  // Generated once per mount, so a retry after a network wobble reuses it and
+  // the server returns the original order rather than creating a second one.
+  const [idempotencyKey] = useState(newIdempotencyKey);
 
   if (!hydrated) {
     return <div className="py-24 text-center text-ink-soft">Loading your cart…</div>;
@@ -53,8 +61,9 @@ export function CheckoutForm() {
     );
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (submitting) return;
 
     const draft: OrderDraft = {
       customer: { name, phone, address, note, discountCode, paymentMethod },
@@ -62,7 +71,7 @@ export function CheckoutForm() {
       totals,
     };
 
-    const found = validateDraft(draft);
+    const found = validateDraft(draft, settings.minOrderValue);
     setErrors(found);
     if (Object.keys(found).length > 0) {
       document.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
@@ -70,12 +79,21 @@ export function CheckoutForm() {
     }
 
     setSubmitting(true);
-    const order = submitOrder(draft);
+    const result = await submitOrder(draft, idempotencyKey);
+
+    if (!result.ok) {
+      // The cart is deliberately left intact: the order did not happen, and
+      // emptying it would lose the customer's basket over a failed request.
+      setErrors(result.errors);
+      setSubmitting(false);
+      document.querySelector<HTMLElement>("[role='alert']")?.scrollIntoView({ block: "center" });
+      return;
+    }
 
     // Persist before clearing: the confirmation page reads the order back from
     // here, and the cart must not survive as a duplicate of an order already
-    // sent. Order matters — clearing first would leave nothing to show.
-    storeSubmittedOrder(order);
+    // placed. Order matters — clearing first would leave nothing to show.
+    storeSubmittedOrder(result.order, draft.customer, result.handoffUrl);
     clear();
     router.push("/order-confirmation");
   }
@@ -282,12 +300,13 @@ export function CheckoutForm() {
 
         <div className="mt-6">
           <Button type="submit" variant="wine" className="w-full py-4" disabled={submitting}>
-            {submitting ? "Sending…" : "Place order"}
+            {submitting ? "Placing your order…" : "Place order"}
           </Button>
         </div>
 
         <p className="mt-4 text-center text-xs leading-relaxed text-ink-soft">
-          Placing the order opens WhatsApp with your order written out, so we get it straight away.
+          Your order is recorded when you press this, and WhatsApp opens so we see it straight
+          away.
         </p>
 
         <p className="mt-4 text-center text-xs text-ink-soft">
