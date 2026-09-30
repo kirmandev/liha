@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { productImage, type CatalogueEntry } from "@/content/menu";
+import type { CatalogueEntry } from "@/lib/catalogue";
 import { formatPKR } from "@/lib/format";
 
 /**
@@ -18,18 +18,16 @@ export function ProductCard({
   product: CatalogueEntry;
   priority?: boolean;
 }) {
-  const image = productImage(product);
-
   return (
     <Link
       href={`/product/${product.slug}`}
       className={`accent-${product.category.accent} group flex h-full flex-col`}
     >
       <div className="photo-frame relative aspect-square w-full rounded-2xl">
-        {image ? (
+        {product.image ? (
           <Image
-            src={image}
-            alt={product.name}
+            src={product.image}
+            alt={product.imageAlt}
             fill
             priority={priority}
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
@@ -38,7 +36,7 @@ export function ProductCard({
         ) : (
           <div className="flex h-full items-center justify-center bg-(--accent-soft) px-6 text-center">
             <span className="font-display text-lg font-semibold text-wine">
-              Made to your brief
+              Photograph coming
             </span>
           </div>
         )}
@@ -46,6 +44,14 @@ export function ProductCard({
         {product.pairsWithSauces ? (
           <span className="absolute left-3 top-3 rounded-full bg-cream/92 px-2.5 py-1 text-[11px] font-semibold text-cocoa backdrop-blur-sm">
             + sauces
+          </span>
+        ) : null}
+
+        {/* Sold out, as opposed to off-menu: the product keeps its page and
+            stays listed, it just cannot be ordered today. */}
+        {!product.available ? (
+          <span className="absolute right-3 top-3 rounded-full bg-ink/85 px-2.5 py-1 text-[11px] font-semibold text-cream">
+            Sold out
           </span>
         ) : null}
       </div>
@@ -57,9 +63,7 @@ export function ProductCard({
         {product.note ? (
           <p className="text-xs uppercase tracking-[0.12em] text-ink-soft">{product.note}</p>
         ) : null}
-        <p className="mt-auto pt-2 text-sm font-bold text-ink">
-          {product.price != null ? formatPKR(product.price) : "Quoted to your brief"}
-        </p>
+        <p className="mt-auto pt-2 text-sm font-bold text-ink">{formatPKR(product.price)}</p>
       </div>
     </Link>
   );

@@ -2,20 +2,21 @@
 
 import { useMemo, useState } from "react";
 
-import { categories, priceRange, type Category } from "@/content/menu";
+import { priceRange, type CatalogueCategory } from "@/lib/catalogue";
 import { ProductCard } from "./ProductCard";
 
 /**
  * The catalogue as a photo grid with a category filter. Owns filter state and
- * nothing else — the data comes from `content/menu.ts`, the card markup from
- * `ProductCard`, and adding to the cart happens on the detail page.
+ * nothing else — the categories arrive as a prop from the server, the card
+ * markup comes from `ProductCard`, and adding to the cart happens on the
+ * detail page.
  */
-export function MenuBrowser() {
+export function MenuBrowser({ categories }: { categories: CatalogueCategory[] }) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const shown = useMemo(
     () => (activeId ? categories.filter((category) => category.id === activeId) : categories),
-    [activeId],
+    [activeId, categories],
   );
 
   return (
@@ -80,19 +81,19 @@ function FilterChip({
   );
 }
 
-function CategorySection({ category }: { category: Category }) {
+function CategorySection({ category }: { category: CatalogueCategory }) {
   const range = priceRange(category);
 
   return (
     <section
-      id={category.id}
+      id={category.slug}
       className={`accent-${category.accent} scroll-mt-36`}
-      aria-labelledby={`${category.id}-heading`}
+      aria-labelledby={`${category.slug}-heading`}
     >
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b-2 border-(--accent) pb-4">
         <div>
           <h2
-            id={`${category.id}-heading`}
+            id={`${category.slug}-heading`}
             className="font-display text-3xl font-semibold text-wine sm:text-4xl"
           >
             {category.name}

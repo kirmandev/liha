@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
-import { site } from "@/content/site";
+import { useCatalogue } from "@/lib/catalogue-context";
 import { formatPKR } from "@/lib/format";
 import { paymentMethodLabel } from "@/lib/order";
 import { readSubmittedOrder, type StoredOrder } from "@/lib/orderHandoff";
@@ -38,6 +38,7 @@ function getServerSnapshot(): Snapshot {
 
 export function OrderConfirmation() {
   const { order, ready } = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const { settings } = useCatalogue();
   const opened = useRef(false);
 
   useEffect(() => {
@@ -169,7 +170,7 @@ export function OrderConfirmation() {
         </div>
 
         <p className="mt-5 text-xs leading-relaxed text-ink-soft">
-          Delivery is charged separately — LIHA covers {formatPKR(site.commerce.deliverySubsidy)}{" "}
+          Delivery is charged separately — LIHA covers {formatPKR(settings.deliverySubsidy)}{" "}
           and we confirm the rest with you before dispatch.
         </p>
       </aside>

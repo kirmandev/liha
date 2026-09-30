@@ -5,6 +5,8 @@ import { Footer } from "@/components/Footer";
 import { Nav } from "@/components/Nav";
 import { StickyOrderBar } from "@/components/StickyOrderBar";
 import { site } from "@/content/site";
+import { CatalogueProvider } from "@/lib/catalogue-context";
+import { CmsUnavailableError, getCatalogue } from "@/lib/cms";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -86,7 +88,54 @@ function StructuredData() {
   );
 }
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/**
+ * Shown when the CMS cannot be reached at all.
+ *
+ * The whole shop reads its catalogue from one place, so there is no partial
+ * degradation to offer — a menu with no prices is worse than an honest notice.
+ * The phone number is hardcoded here rather than read from the CMS for the
+ * obvious reason.
+ */
+function Unavailable() {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-6 text-center">
+      <div>
+        <h1 className="font-display text-4xl font-semibold text-wine">Back shortly</h1>
+        <p className="mt-4 max-w-sm text-ink-soft">
+          Our menu is briefly unavailable. To place an order right now, message us on WhatsApp at{" "}
+          <a className="font-semibold text-wine underline" href={`tel:${site.phone.intl}`}>
+            {site.phone.display}
+          </a>
+          .
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Fetched once here and handed to every client component that needs prices,
+  // so the cart never has to show a loading state to compute a total.
+  let catalogue = null;
+  try {
+    catalogue = await getCatalogue();
+  } catch (error) {
+    if (!(error instanceof CmsUnavailableError)) throw error;
+    // Logged for us, never shown to the visitor — the reason the CMS is
+    // unreachable is operational detail, not customer-facing copy.
+    console.error(`[storefront] catalogue unavailable: ${error.message}`);
+  }
+
+  if (!catalogue) {
+    return (
+      <html lang="en" className={`${fraunces.variable} ${jakarta.variable} h-full`}>
+        <body className="flex min-h-full flex-col bg-cream">
+          <Unavailable />
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html lang="en" className={`${fraunces.variable} ${jakarta.variable} h-full`}>
       <body className="flex min-h-full flex-col bg-cream">
@@ -97,12 +146,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           Skip to content
         </a>
-        <Nav />
-        <main id="main" className="flex-1">
-          {children}
-        </main>
-        <Footer />
-        <StickyOrderBar />
+        <CatalogueProvider catalogue={catalogue}>
+          <Nav />
+          <main id="main" className="flex-1">
+            {children}
+          </main>
+          <Footer />
+          <StickyOrderBar />
+        </CatalogueProvider>
         {/* Clears the mobile sticky bar so it never covers the footer's last line. */}
         <div aria-hidden className="h-16 md:hidden" />
       </body>

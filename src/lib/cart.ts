@@ -15,6 +15,7 @@
 
 import { useMemo, useSyncExternalStore } from "react";
 
+import { useCatalogue } from "./catalogue-context";
 import {
   addLine,
   createLine,
@@ -153,16 +154,19 @@ export type UseCart = {
 
 export function useCart(): UseCart {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  // Prices come from the CMS, so the cart cannot resolve its own lines without
+  // the catalogue the server already fetched.
+  const { index, settings } = useCatalogue();
 
   return useMemo(() => {
-    const resolved = resolveLines(snapshot.lines);
+    const resolved = resolveLines(snapshot.lines, index);
     return {
       lines: snapshot.lines,
       resolved,
-      totals: orderTotals(resolved),
+      totals: orderTotals(resolved, settings),
       count: itemCount(snapshot.lines),
       hydrated: snapshot.hydrated,
       ...cartActions,
     };
-  }, [snapshot]);
+  }, [snapshot, index, settings]);
 }

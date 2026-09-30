@@ -3,14 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { productImage } from "@/content/menu";
-import { site } from "@/content/site";
 import { useCart } from "@/lib/cart";
+import { useCatalogue } from "@/lib/catalogue-context";
 import { formatPKR } from "@/lib/format";
 import { ButtonLink } from "./ui";
 
 export function CartView() {
   const { resolved, totals, setQty, remove, hydrated } = useCart();
+  const { settings } = useCatalogue();
 
   // Nothing renders until localStorage has been read, otherwise the page shows
   // an empty cart for a frame before the real one replaces it.
@@ -38,15 +38,20 @@ export function CartView() {
     <div className="grid gap-12 lg:grid-cols-[1.6fr_1fr] lg:items-start">
       <ul className="flex flex-col divide-y divide-wine/10 border-y border-wine/10">
         {resolved.map(({ line, product, addOns, total }) => {
-          const image = productImage(product);
           return (
             <li key={line.id} className="flex gap-4 py-5 sm:gap-6">
               <Link
                 href={`/product/${product.slug}`}
                 className="photo-frame relative size-24 shrink-0 overflow-hidden rounded-xl sm:size-28"
               >
-                {image ? (
-                  <Image src={image} alt={product.name} fill sizes="112px" className="object-cover" />
+                {product.image ? (
+                  <Image
+                    src={product.image}
+                    alt={product.imageAlt}
+                    fill
+                    sizes="112px"
+                    className="object-cover"
+                  />
                 ) : null}
               </Link>
 
@@ -126,7 +131,7 @@ export function CartView() {
 
         <p className="mt-4 text-xs leading-relaxed text-ink-soft">
           Delivery depends on your area — LIHA covers{" "}
-          {formatPKR(site.commerce.deliverySubsidy)} of it, and the rest is confirmed with you
+          {formatPKR(settings.deliverySubsidy)} of it, and the rest is confirmed with you
           before dispatch.
         </p>
 
@@ -139,7 +144,7 @@ export function CartView() {
         ) : (
           <div className="mt-6">
             <p className="rounded-xl bg-butter/30 px-4 py-3 text-sm font-semibold text-ink">
-              Minimum order is {formatPKR(site.commerce.minOrderValue)}. Add{" "}
+              Minimum order is {formatPKR(totals.minOrderValue)}. Add{" "}
               {formatPKR(totals.shortOfMinimum)} more to check out.
             </p>
             <div className="mt-3">

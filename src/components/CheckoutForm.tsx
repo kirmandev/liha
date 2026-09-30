@@ -6,9 +6,16 @@ import { useState } from "react";
 
 import { PAYMENT_METHODS, site, type PaymentMethod } from "@/content/site";
 import { useCart } from "@/lib/cart";
+import { useCatalogue } from "@/lib/catalogue-context";
+import { checkDiscountCode, type DiscountResult } from "@/lib/discount";
 import { formatPKR } from "@/lib/format";
 import { storeSubmittedOrder } from "@/lib/orderHandoff";
-import { submitOrder, validateDraft, type OrderDraft } from "@/lib/order";
+import {
+  newIdempotencyKey,
+  submitOrder,
+  validateDraft,
+  type OrderDraft,
+} from "@/lib/order";
 import { Field, TextArea, TextInput } from "./FormControls";
 import { Button, ButtonLink } from "./ui";
 
@@ -22,6 +29,7 @@ import { Button, ButtonLink } from "./ui";
  */
 export function CheckoutForm() {
   const { resolved, totals, hydrated, clear } = useCart();
+  const { settings } = useCatalogue();
   const router = useRouter();
 
   const [name, setName] = useState("");
@@ -29,9 +37,14 @@ export function CheckoutForm() {
   const [address, setAddress] = useState("");
   const [note, setNote] = useState("");
   const [discountCode, setDiscountCode] = useState("");
+  const [discount, setDiscount] = useState<DiscountResult | null>(null);
+  const [checkingCode, setCheckingCode] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("jazzcash");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  // Generated once per mount, so a retry after a network wobble reuses it and
+  // the server returns the original order rather than creating a second one.
+  const [idempotencyKey] = useState(newIdempotencyKey);
 
   if (!hydrated) {
     return <div className="py-24 text-center text-ink-soft">Loading your cart…</div>;
@@ -51,8 +64,18 @@ export function CheckoutForm() {
     );
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleApplyCode() {
+    setCheckingCode(true);
+    // Checked against the server, which recomputes the subtotal from its own
+    // catalogue. The amount below is for display only — the order endpoint
+    // works it out again when the order is actually placed.
+    setDiscount(await checkDiscountCode(discountCode, resolved));
+    setCheckingCode(false);
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (submitting) return;
 
     const draft: OrderDraft = {
       customer: { name, phone, address, note, discountCode, paymentMethod },
@@ -60,7 +83,7 @@ export function CheckoutForm() {
       totals,
     };
 
-    const found = validateDraft(draft);
+    const found = validateDraft(draft, settings.minOrderValue);
     setErrors(found);
     if (Object.keys(found).length > 0) {
       document.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
@@ -68,17 +91,29 @@ export function CheckoutForm() {
     }
 
     setSubmitting(true);
-    const order = submitOrder(draft);
+    const result = await submitOrder(draft, idempotencyKey);
+
+    if (!result.ok) {
+      // The cart is deliberately left intact: the order did not happen, and
+      // emptying it would lose the customer's basket over a failed request.
+      setErrors(result.errors);
+      setSubmitting(false);
+      document.querySelector<HTMLElement>("[role='alert']")?.scrollIntoView({ block: "center" });
+      return;
+    }
 
     // Persist before clearing: the confirmation page reads the order back from
     // here, and the cart must not survive as a duplicate of an order already
-    // sent. Order matters — clearing first would leave nothing to show.
-    storeSubmittedOrder(order);
+    // placed. Order matters — clearing first would leave nothing to show.
+    storeSubmittedOrder(result.order, draft.customer, result.handoffUrl);
     clear();
     router.push("/order-confirmation");
   }
 
   const selected = PAYMENT_METHODS.find((method) => method.id === paymentMethod);
+  // Display only. The server recomputes this when the order is placed, and its
+  // figure is the one that counts.
+  const appliedDiscount = discount?.valid ? discount.amount : 0;
 
   return (
     <form onSubmit={handleSubmit} noValidate className="grid gap-12 lg:grid-cols-[1.4fr_1fr] lg:items-start">
@@ -190,13 +225,13 @@ export function CheckoutForm() {
 
           {selected ? (
             <p className="mt-4 rounded-xl bg-cream-deep/70 px-4 py-3 text-sm text-ink-soft">
-              {/* The real account details are not on file yet (SRS §13 has LIHA
-                  supplying them). Saying so beats printing a placeholder number
-                  someone might actually transfer money to. */}
-              {paymentMethod === "jazzcash" && site.commerce.payment.jazzCashNumber
-                ? `Send to ${site.commerce.payment.jazzCashNumber} and share the screenshot.`
-                : paymentMethod === "bank" && site.commerce.payment.bankAccount
-                  ? `Transfer to ${site.commerce.payment.bankAccount.bank}, ${site.commerce.payment.bankAccount.title} — ${site.commerce.payment.bankAccount.number}.`
+              {/* Account details come from the admin. While they are unset the
+                  site says staff will send them, rather than printing a
+                  placeholder someone might actually transfer money to. */}
+              {paymentMethod === "jazzcash" && settings.jazzCashNumber
+                ? `Send to ${settings.jazzCashNumber} and share the screenshot.`
+                : paymentMethod === "bank" && settings.bankAccount
+                  ? `Transfer to ${settings.bankAccount.bank}, ${settings.bankAccount.title} — ${settings.bankAccount.number}.`
                   : `We will send you the ${selected.label.toLowerCase()} details on WhatsApp as soon as the order comes through.`}
             </p>
           ) : null}
@@ -206,21 +241,64 @@ export function CheckoutForm() {
           <legend className="font-display text-2xl font-semibold text-wine">
             Have a discount code?
           </legend>
-          <div className="mt-5 max-w-sm">
+
+          <div className="mt-5 max-w-md">
             <Field
               label="Discount code"
               htmlFor="discountCode"
-              hint="Codes are checked by hand right now — we will apply it and confirm your total before you pay."
+              error={discount && !discount.valid ? discount.message : errors.discountCode}
+              hint="Exactly as written on your slip."
             >
-              <TextInput
-                id="discountCode"
-                name="discountCode"
-                autoCapitalize="characters"
-                placeholder="e.g. LIHA50"
-                value={discountCode}
-                onChange={(event) => setDiscountCode(event.target.value.toUpperCase())}
-              />
+              <div className="flex gap-2">
+                <TextInput
+                  id="discountCode"
+                  name="discountCode"
+                  autoCapitalize="characters"
+                  placeholder="e.g. LIHA50"
+                  value={discountCode}
+                  error={discount && !discount.valid ? discount.message : undefined}
+                  disabled={Boolean(discount?.valid)}
+                  onChange={(event) => {
+                    setDiscountCode(event.target.value.toUpperCase());
+                    // Any edit invalidates the previous answer, so a stale
+                    // "applied" badge can never sit above a different code.
+                    setDiscount(null);
+                  }}
+                />
+                {discount?.valid ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0 px-5"
+                    onClick={() => {
+                      setDiscount(null);
+                      setDiscountCode("");
+                    }}
+                  >
+                    Remove
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0 px-5"
+                    disabled={checkingCode || discountCode.trim().length === 0}
+                    onClick={handleApplyCode}
+                  >
+                    {checkingCode ? "Checking…" : "Apply"}
+                  </Button>
+                )}
+              </div>
             </Field>
+
+            {discount?.valid ? (
+              <p
+                role="status"
+                className="mt-3 rounded-xl bg-pistachio/25 px-4 py-3 text-sm font-semibold text-ink"
+              >
+                {discount.code} applied — {formatPKR(discount.amount)} off.
+              </p>
+            ) : null}
           </div>
         </fieldset>
       </div>
@@ -249,6 +327,16 @@ export function CheckoutForm() {
             <dt className="text-ink-soft">Subtotal</dt>
             <dd className="font-semibold tabular-nums">{formatPKR(totals.subtotal)}</dd>
           </div>
+          {appliedDiscount > 0 ? (
+            <div className="flex items-baseline justify-between">
+              <dt className="text-ink-soft">
+                Discount{discount?.valid ? ` (${discount.code})` : ""}
+              </dt>
+              <dd className="font-semibold tabular-nums text-rust">
+                −{formatPKR(appliedDiscount)}
+              </dd>
+            </div>
+          ) : null}
           {totals.tax > 0 ? (
             <div className="flex items-baseline justify-between">
               <dt className="text-ink-soft">Tax ({totals.taxRatePercent}%)</dt>
@@ -262,13 +350,13 @@ export function CheckoutForm() {
           <div className="mt-2 flex items-baseline justify-between border-t border-wine/15 pt-4">
             <dt className="font-display text-lg font-semibold text-wine">Total</dt>
             <dd className="font-display text-2xl font-semibold text-wine tabular-nums">
-              {formatPKR(totals.total)}
+              {formatPKR(Math.max(0, totals.total - appliedDiscount))}
             </dd>
           </div>
         </dl>
 
         <p className="mt-4 text-xs leading-relaxed text-ink-soft">
-          Delivery depends on your area — LIHA covers {formatPKR(site.commerce.deliverySubsidy)} of
+          Delivery depends on your area — LIHA covers {formatPKR(settings.deliverySubsidy)} of
           the rider fare and the rest is confirmed with you before dispatch.
         </p>
 
@@ -280,12 +368,13 @@ export function CheckoutForm() {
 
         <div className="mt-6">
           <Button type="submit" variant="wine" className="w-full py-4" disabled={submitting}>
-            {submitting ? "Sending…" : "Place order"}
+            {submitting ? "Placing your order…" : "Place order"}
           </Button>
         </div>
 
         <p className="mt-4 text-center text-xs leading-relaxed text-ink-soft">
-          Placing the order opens WhatsApp with your order written out, so we get it straight away.
+          Your order is recorded when you press this, and WhatsApp opens so we see it straight
+          away.
         </p>
 
         <p className="mt-4 text-center text-xs text-ink-soft">
