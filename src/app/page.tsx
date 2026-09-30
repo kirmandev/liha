@@ -31,8 +31,15 @@ const MARQUEE_WORDS = [
   "Custom Cakes",
 ];
 
-/** The three photographs that carry the hero. */
-const HERO_SLUGS = ["dubai-chocolate-cake-for-one", "brookie", "churros-with-chocolate-sauce"];
+/**
+ * The three photographs that carry the hero. Lead first.
+ *
+ * Chosen for how they photograph, not for what sells most: the London Cake
+ * cross-section shows its layers and reads as patisserie, where a cake in a
+ * clear takeaway tub reads as a delivery-app listing. The Matilda tub brings
+ * the branded packaging; the churros bring warmth and motion.
+ */
+const HERO_SLUGS = ["the-london-cake", "matilda-cake", "churros-with-chocolate-sauce"];
 
 export default async function Home() {
   const catalogue = await getCatalogue();
@@ -44,7 +51,7 @@ export default async function Home() {
       <Categories catalogue={catalogue} />
       <Signatures items={featuredEntries(catalogue)} />
       <CustomCakes />
-      <Corporate />
+      <Corporate catalogue={catalogue} />
       <Proof />
     </>
   );
@@ -54,7 +61,7 @@ function Hero({ catalogue }: { catalogue: Catalogue }) {
   const [lead, second, third] = HERO_SLUGS.map((slug) => findEntry(catalogue, slug));
 
   return (
-    <section className="relative overflow-hidden bg-cream px-5 pb-16 pt-14 sm:px-8 sm:pb-24 sm:pt-20">
+    <section className="relative overflow-hidden bg-cream px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-12 lg:pt-20">
       <div
         aria-hidden
         className="pointer-events-none absolute -left-32 top-10 size-96 rounded-full bg-blush/70 blur-3xl"
@@ -64,8 +71,9 @@ function Hero({ catalogue }: { catalogue: Catalogue }) {
         className="pointer-events-none absolute -right-24 bottom-0 size-80 rounded-full bg-butter/40 blur-3xl"
       />
 
-      <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
-        <div>
+      <div className="relative mx-auto grid max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+        {/* Text second on small screens, first on large — see the photo block. */}
+        <div className="order-last lg:order-first">
           <Eyebrow className="text-rust">
             <span className="inline-block size-2 rounded-full bg-pistachio" />
             {site.address.locality}, {site.address.city}
@@ -122,8 +130,13 @@ function Hero({ catalogue }: { catalogue: Catalogue }) {
         </div>
 
         {/* Three photographs, the largest scalloped so the frame that carries
-            her Instagram identity survives the move to photography. */}
-        <div className="relative mx-auto w-full max-w-lg">
+            her Instagram identity survives the move to photography.
+
+            Rendered above the headline on phones. Most visitors arrive from
+            Instagram on a phone, and the first screen of a bakery site has to
+            show cake — a text-only fold was the biggest weakness found in
+            review. On desktop the text leads and the photos sit beside it. */}
+        <div className="relative order-first mx-auto w-full max-w-lg lg:order-last">
           <div className="grid grid-cols-5 grid-rows-5 gap-3 sm:gap-4">
             {lead?.image ? (
               <Link
@@ -184,7 +197,7 @@ function Hero({ catalogue }: { catalogue: Catalogue }) {
             ) : null}
           </div>
 
-          <div className="absolute -bottom-5 -left-3 flex size-24 rotate-[-8deg] items-center justify-center rounded-full bg-butter text-center sm:-left-7 sm:size-28">
+          <div className="absolute -left-3 -top-3 flex size-20 rotate-[-8deg] items-center justify-center rounded-full bg-butter text-center shadow-sm sm:-left-6 sm:-top-4 sm:size-24">
             <span className="font-display text-sm font-semibold leading-tight text-ink">
               Made
               <br />
@@ -371,7 +384,12 @@ function CustomCakes() {
   );
 }
 
-function Corporate() {
+function Corporate({ catalogue }: { catalogue: Catalogue }) {
+  // A shot box is a gift box: the natural image for corporate orders. Falls
+  // back to the line-art only if both products are withdrawn from the menu.
+  const box =
+    findEntry(catalogue, "brownie-shot-box") ?? findEntry(catalogue, "cookie-shot-box");
+
   return (
     <section className="bg-wine px-5 py-24 text-cream sm:px-8">
       <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[1.2fr_1fr] lg:items-center">
@@ -390,12 +408,27 @@ function Corporate() {
         </Reveal>
 
         <Reveal className="flex justify-center">
-          <div className="relative">
+          {box?.image ? (
+            <Link
+              href={`/product/${box.slug}`}
+              className="group w-full max-w-sm"
+              aria-label={box.name}
+            >
+              <ScallopFrame size={24} className="bg-butter" variant="solid">
+                <div className="photo-frame relative aspect-square w-full">
+                  <Image
+                    src={box.image}
+                    alt={box.imageAlt}
+                    fill
+                    sizes="(min-width: 1024px) 30vw, 80vw"
+                    className="photo-zoom object-cover"
+                  />
+                </div>
+              </ScallopFrame>
+            </Link>
+          ) : (
             <LineArt art="shotBox" className="size-56 text-cream/80 sm:size-64" strokeWidth={1.8} />
-            <div className="slow-spin absolute -right-4 -top-4 flex size-24 items-center justify-center rounded-full border-2 border-butter/50">
-              <LineArt art="cookie" className="size-12 text-butter" strokeWidth={2.6} />
-            </div>
-          </div>
+          )}
         </Reveal>
       </div>
     </section>

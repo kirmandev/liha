@@ -1,9 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { site } from "@/content/site";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { WhatsAppIcon } from "./ui";
 
@@ -32,14 +32,14 @@ export function StickyOrderBar() {
       }`}
     >
       <div className="flex items-center gap-2">
-        <a
-          href={site.foodpanda.url}
-          target="_blank"
-          rel="noopener noreferrer"
+        {/* Our own menu and cart, not Foodpanda: sending the primary mobile
+            action to a third party would bypass the checkout we built. */}
+        <Link
+          href="/menu"
           className="flex-1 rounded-full bg-wine px-4 py-3 text-center text-sm font-semibold text-cream"
         >
           Order the menu
-        </a>
+        </Link>
         <a
           href={buildWhatsAppUrl({ kind: "general" })}
           target="_blank"

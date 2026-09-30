@@ -12,6 +12,17 @@ const cmsUrl = new URL(process.env.CMS_URL ?? "http://localhost:3005");
 
 const nextConfig: NextConfig = {
   images: {
+    /**
+     * Next 16 refuses to optimise an upstream image whose host resolves to a
+     * private address, as SSRF protection. In development the CMS *is*
+     * localhost, so this has to be allowed — but only there.
+     *
+     * In production it must stay off, which means the CMS's public hostname
+     * (its NEXT_PUBLIC_SERVER_URL) is what media URLs are built from, even when
+     * both apps share a box. Pointing CMS_URL at localhost in production would
+     * break every product photo, quietly, with only a server-side log to say why.
+     */
+    dangerouslyAllowLocalIP: process.env.NODE_ENV !== "production",
     remotePatterns: [
       {
         protocol: cmsUrl.protocol.replace(":", "") as "http" | "https",
