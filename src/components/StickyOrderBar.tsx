@@ -23,7 +23,17 @@ export function StickyOrderBar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  if (pathname === "/custom") return null;
+  // Hidden wherever a more specific action already owns the bottom of the
+  // screen: the custom-cake form, a product page's own add-to-cart bar, and
+  // the cart and checkout, where "Order the menu" would pull people away from
+  // the order they are in the middle of placing.
+  const suppressed =
+    pathname === "/custom" ||
+    pathname.startsWith("/product/") ||
+    pathname === "/cart" ||
+    pathname === "/checkout" ||
+    pathname === "/order-confirmation";
+  if (suppressed) return null;
 
   return (
     <div

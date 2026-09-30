@@ -8,7 +8,9 @@ import type { NextConfig } from "next";
  * Derived from CMS_URL so development and production agree without a second
  * place to update. The fallback covers a local CMS started before .env exists.
  */
-const cmsUrl = new URL(process.env.CMS_URL ?? "http://localhost:3005");
+// `||`, not `??`: an empty CMS_URL means "no CMS" (static mode), and
+// `new URL("")` throws, which would fail the whole build over an unset variable.
+const cmsUrl = new URL(process.env.CMS_URL || "http://localhost:3005");
 
 const nextConfig: NextConfig = {
   images: {

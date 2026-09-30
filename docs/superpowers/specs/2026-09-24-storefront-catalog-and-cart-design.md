@@ -134,6 +134,29 @@ non-custom product has a downloaded photo on disk, signature picks resolve), and
 order-message composition. No component or E2E tests — proportionate, same as
 the original spec.
 
+## Two data modes (added 30 Sep)
+
+The storefront runs in one of two modes, chosen by whether `CMS_URL` is set.
+
+**Live.** The catalogue, settings and hero picks come from the CMS's
+`/api/storefront` endpoint for the request hostname; orders post to the CMS,
+which re-prices and persists them; discount codes validate and redeem there.
+
+**Static.** No CMS configured. The catalogue is `content/menu.ts` and the
+photographs are `public/products/`; orders are re-priced against that same
+data by the storefront's own `/api/orders` and handed to WhatsApp with nothing
+persisted — the Phase 1 behaviour. Discount codes are captured and confirmed by
+staff, never applied.
+
+The mode is explicit rather than "try live, fall back": a CMS that is
+configured but unreachable is an outage to be seen, not papered over with data
+that may be stale. Static mode exists so `main` can deploy and trade before the
+admin is on a server, and so a future business can be launched from a typed
+file before its admin is set up.
+
+In both modes the browser never sends a price. That rule predates the modes and
+survives them.
+
 ## Not doing
 
 Branch selection at checkout (SRS §8: the storefront stays one unified menu and

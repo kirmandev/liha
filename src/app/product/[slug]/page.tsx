@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 
 import { AddToCart } from "@/components/AddToCart";
 import { ProductCard } from "@/components/ProductCard";
+import { StickyAddToCart } from "@/components/StickyAddToCart";
 import { ButtonLink, Eyebrow } from "@/components/ui";
 import { site } from "@/content/site";
 import { allEntries, findEntry, sauceAddOns } from "@/lib/catalogue";
@@ -124,7 +125,7 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
 
             <p className="mt-6 leading-relaxed text-ink-soft">{product.description}</p>
 
-            <div className="mt-9">
+            <div className="mt-9" id="add-to-cart">
               {product.available ? (
                 <AddToCart
                   slug={product.slug}
@@ -169,6 +170,15 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
           </div>
         </div>
       </div>
+
+      {product.available ? (
+        <StickyAddToCart
+          slug={product.slug}
+          name={product.name}
+          price={product.price}
+          watch="add-to-cart"
+        />
+      ) : null}
 
       {related.length > 0 ? (
         <section className="border-t border-wine/10 bg-cream-deep/40 px-5 py-16 sm:px-8">

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { LineArt } from "@/components/LineArt";
+import { PhotoPlaceholder } from "@/components/PhotoPlaceholder";
 import { Reveal } from "@/components/Reveal";
 import { ScallopFrame } from "@/components/ScallopFrame";
 import { ButtonLink, Eyebrow, InstagramIcon, SectionHeading } from "@/components/ui";
@@ -45,12 +45,11 @@ export default function AboutPage() {
             </div>
           </div>
 
+          {/* Her portrait goes here. The frame is already the right size and
+              in the right place, so the photograph drops in with no layout
+              change when it arrives. */}
           <div className="mx-auto w-full max-w-sm">
-            <ScallopFrame size={30} className="bg-blush">
-              <div className="flex aspect-square items-center justify-center p-8">
-                <LineArt art="whisk" className="w-2/3 text-wine" strokeWidth={2} />
-              </div>
-            </ScallopFrame>
+            <PhotoPlaceholder label="Her portrait, coming soon" art="whisk" />
           </div>
         </div>
       </header>

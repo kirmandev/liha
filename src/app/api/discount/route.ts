@@ -16,9 +16,18 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const CMS_URL = process.env.CMS_URL ?? "http://localhost:3005";
+const CMS_URL = process.env.CMS_URL?.replace(/\/$/, "");
 
 export async function POST(request: Request) {
+  // With no CMS there is nothing to validate against, and a code that cannot
+  // be checked must not be shown as applied. Staff confirm it on WhatsApp.
+  if (!CMS_URL) {
+    return NextResponse.json({
+      valid: false,
+      message: "We will apply your code and confirm the total on WhatsApp.",
+    });
+  }
+
   const host = (await headers()).get("host");
   if (!host) {
     return NextResponse.json({ valid: false, message: "Unknown shop." }, { status: 400 });
@@ -31,7 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ valid: false, message: "Malformed request." }, { status: 400 });
   }
 
-  const url = `${CMS_URL.replace(/\/$/, "")}/api/storefront/discount?host=${encodeURIComponent(host)}`;
+  const url = `${CMS_URL}/api/storefront/discount?host=${encodeURIComponent(host)}`;
 
   try {
     const upstream = await fetch(url, {

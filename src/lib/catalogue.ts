@@ -58,6 +58,11 @@ export type Catalogue = {
   sauceAddOnSlugs: string[];
   /** The home page's "start here" picks, in the order the owner chose. */
   featuredSlugs: string[];
+  /**
+   * The three hero photographs, lead first. Optional: the CMS does not supply
+   * this yet, so the home page keeps a default and uses this when present.
+   */
+  heroSlugs?: string[];
   generatedAt: string;
 };
 

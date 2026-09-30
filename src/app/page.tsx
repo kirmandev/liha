@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { LineArt } from "@/components/LineArt";
+import { PhotoPlaceholder } from "@/components/PhotoPlaceholder";
 import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { ScallopFrame } from "@/components/ScallopFrame";
@@ -9,6 +10,7 @@ import { ButtonLink, Eyebrow, InstagramIcon, SectionHeading, WhatsAppIcon } from
 import { HOW_IT_WORKS } from "@/content/custom";
 import { site } from "@/content/site";
 import {
+  allEntries,
   featuredEntries,
   findEntry,
   priceRange,
@@ -18,6 +20,7 @@ import {
   type CatalogueEntry,
 } from "@/lib/catalogue";
 import { getCatalogue } from "@/lib/cms";
+import { formatPKR } from "@/lib/format";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
 const MARQUEE_WORDS = [
@@ -32,14 +35,15 @@ const MARQUEE_WORDS = [
 ];
 
 /**
- * The three photographs that carry the hero. Lead first.
+ * The three photographs that carry the hero, lead first, used when the
+ * catalogue does not name its own.
  *
  * Chosen for how they photograph, not for what sells most: the London Cake
  * cross-section shows its layers and reads as patisserie, where a cake in a
  * clear takeaway tub reads as a delivery-app listing. The Matilda tub brings
  * the branded packaging; the churros bring warmth and motion.
  */
-const HERO_SLUGS = ["the-london-cake", "matilda-cake", "churros-with-chocolate-sauce"];
+const DEFAULT_HERO = ["the-london-cake", "matilda-cake", "churros-with-chocolate-sauce"];
 
 export default async function Home() {
   const catalogue = await getCatalogue();
@@ -48,8 +52,11 @@ export default async function Home() {
     <>
       <Hero catalogue={catalogue} />
       <Marquee />
+      <FlavourOfTheMonth catalogue={catalogue} />
       <Categories catalogue={catalogue} />
       <Signatures items={featuredEntries(catalogue)} />
+      <HowItWorks catalogue={catalogue} />
+      <MeetTheBaker />
       <CustomCakes />
       <Corporate catalogue={catalogue} />
       <Proof />
@@ -58,7 +65,8 @@ export default async function Home() {
 }
 
 function Hero({ catalogue }: { catalogue: Catalogue }) {
-  const [lead, second, third] = HERO_SLUGS.map((slug) => findEntry(catalogue, slug));
+  const slugs = catalogue.heroSlugs?.length ? catalogue.heroSlugs : DEFAULT_HERO;
+  const [lead, second, third] = slugs.map((slug) => findEntry(catalogue, slug));
 
   return (
     <section className="relative overflow-hidden bg-cream px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-12 lg:pt-20">
@@ -122,7 +130,7 @@ function Hero({ catalogue }: { catalogue: Catalogue }) {
                 Custom cakes
               </dt>
               <dd className="font-display mt-1 text-2xl font-semibold text-wine">
-                {site.customLeadTimeDays} days
+                {catalogue.settings.customLeadTimeDays} days
                 <span className="ml-2 text-sm font-normal text-ink-soft">notice</span>
               </dd>
             </div>
@@ -134,8 +142,7 @@ function Hero({ catalogue }: { catalogue: Catalogue }) {
 
             Rendered above the headline on phones. Most visitors arrive from
             Instagram on a phone, and the first screen of a bakery site has to
-            show cake — a text-only fold was the biggest weakness found in
-            review. On desktop the text leads and the photos sit beside it. */}
+            show cake. On desktop the text leads and the photos sit beside it. */}
         <div className="relative order-first mx-auto w-full max-w-lg lg:order-last">
           <div className="grid grid-cols-5 grid-rows-5 gap-3 sm:gap-4">
             {lead?.image ? (
@@ -147,7 +154,7 @@ function Hero({ catalogue }: { catalogue: Catalogue }) {
                 <ScallopFrame size={26} className="h-full bg-wine" variant="solid">
                   <div className="photo-frame relative h-full min-h-56 w-full">
                     <Image
-                      src={lead.image ?? ""}
+                      src={lead.image}
                       alt={lead.imageAlt}
                       fill
                       priority
@@ -167,7 +174,7 @@ function Hero({ catalogue }: { catalogue: Catalogue }) {
               >
                 <div className="photo-frame relative h-full min-h-32 w-full overflow-hidden rounded-2xl">
                   <Image
-                    src={second.image ?? ""}
+                    src={second.image}
                     alt={second.imageAlt}
                     fill
                     priority
@@ -186,7 +193,7 @@ function Hero({ catalogue }: { catalogue: Catalogue }) {
               >
                 <div className="photo-frame relative h-full min-h-32 w-full overflow-hidden rounded-2xl">
                   <Image
-                    src={third.image ?? ""}
+                    src={third.image}
                     alt={third.imageAlt}
                     fill
                     sizes="30vw"
@@ -229,7 +236,77 @@ function Marquee() {
   );
 }
 
+/**
+ * This month's special, as a spotlight rather than a card among cards.
+ *
+ * Driven entirely by the catalogue: the section renders only while the
+ * "Flavour of the Month" category has an item in it, and that item disappears
+ * on its own when the owner's availability window closes. Nothing here has to
+ * be remembered or taken down by hand — which is the point of a monthly item
+ * having its own section instead of a tile someone forgets to update.
+ */
+function FlavourOfTheMonth({ catalogue }: { catalogue: Catalogue }) {
+  const category = catalogue.categories.find((entry) => entry.slug === "flavour-of-the-month");
+  const item = category?.items.find((entry) => entry.image) ?? category?.items[0];
+  if (!category || !item) return null;
+
+  return (
+    <section className={`accent-${category.accent} px-5 py-20 sm:px-8 sm:py-24`}>
+      <div className="mx-auto max-w-6xl">
+        <Reveal>
+          <div className="grid items-center gap-10 rounded-[2.5rem] bg-(--accent-soft) p-6 sm:p-10 lg:grid-cols-[1fr_1.1fr] lg:gap-16 lg:p-14">
+            <Link
+              href={`/product/${item.slug}`}
+              className="group relative mx-auto w-full max-w-md"
+              aria-label={item.name}
+            >
+              <ScallopFrame size={26} className="bg-(--accent)" variant="solid">
+                <div className="photo-frame relative aspect-square w-full">
+                  {item.image ? (
+                    <Image
+                      src={item.image}
+                      alt={item.imageAlt}
+                      fill
+                      sizes="(min-width: 1024px) 40vw, 90vw"
+                      className="photo-zoom object-cover"
+                    />
+                  ) : null}
+                </div>
+              </ScallopFrame>
+              <span className="absolute -right-2 -top-3 rotate-6 rounded-full bg-wine px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-cream shadow-sm sm:-right-4">
+                Only while it lasts
+              </span>
+            </Link>
+
+            <div>
+              <Eyebrow className="text-(--accent)">
+                <span className="inline-block size-2 rounded-full bg-(--accent)" />
+                {category.name}
+              </Eyebrow>
+              <h2 className="font-display mt-4 text-4xl font-semibold leading-[1.02] tracking-tight text-wine sm:text-5xl lg:text-6xl">
+                {item.name}
+              </h2>
+              <p className="mt-5 max-w-lg text-lg leading-relaxed text-ink-soft">
+                {item.description}
+              </p>
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <ButtonLink href={`/product/${item.slug}`} variant="wine" className="px-7 py-3.5">
+                  Order it — {formatPKR(item.price)}
+                </ButtonLink>
+                <p className="text-sm text-ink-soft">{category.blurb}</p>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
 function Categories({ catalogue }: { catalogue: Catalogue }) {
+  const everything = allEntries(catalogue);
+  const lowest = everything.length ? Math.min(...everything.map((item) => item.price)) : 0;
+
   return (
     <section className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
       <Reveal>
@@ -241,11 +318,45 @@ function Categories({ catalogue }: { catalogue: Catalogue }) {
       </Reveal>
 
       <ul className="mt-14 grid grid-cols-2 gap-x-5 gap-y-9 lg:grid-cols-4">
-        {primaryCategories(catalogue).map((category) => (
-          <Reveal as="li" key={category.id}>
-            <CategoryCard category={category} />
-          </Reveal>
-        ))}
+        {primaryCategories(catalogue)
+          // The month's special has its own spotlight above; a tile as well
+          // would be the same photograph twice on one screen. An empty
+          // category has nothing to show and would render as a blank box.
+          .filter((category) => category.slug !== "flavour-of-the-month")
+          .filter((category) => category.items.length > 0)
+          .map((category) => (
+            <Reveal as="li" key={category.id}>
+              <CategoryCard category={category} />
+            </Reveal>
+          ))}
+
+        {/* Fills the grid to a full row and doubles as the way in. The extras
+            — sauces, gift notes, custom cakes — live only on the full menu. */}
+        <Reveal as="li">
+          <Link href="/menu" className="group flex h-full flex-col">
+            <div className="relative flex aspect-[4/5] w-full flex-col justify-between overflow-hidden rounded-2xl bg-wine p-5 text-cream">
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -bottom-10 -right-10 size-40 rounded-full bg-rust/40 blur-2xl"
+              />
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-butter">
+                The whole menu
+              </span>
+              <div>
+                <p className="font-display text-5xl font-semibold leading-none">
+                  {everything.length}
+                </p>
+                <p className="mt-2 text-sm text-cream/80">things, from {formatPKR(lowest)}</p>
+              </div>
+              <span className="font-display text-xl font-semibold transition-transform group-hover:translate-x-1 motion-reduce:group-hover:translate-x-0">
+                See everything →
+              </span>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+              Sauces, gift notes and custom cakes are on the full menu.
+            </p>
+          </Link>
+        </Reveal>
       </ul>
     </section>
   );
@@ -327,6 +438,143 @@ function Signatures({ items }: { items: CatalogueEntry[] }) {
             Order on Foodpanda
           </ButtonLink>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * How an order actually goes, in three steps.
+ *
+ * Nothing is charged on the site — staff confirm by phone and send payment
+ * details — and a checkout that takes no card money surprises people. Saying
+ * so plainly, before they reach it, turns that surprise into a reason to
+ * trust the shop: a human will call.
+ */
+function HowItWorks({ catalogue }: { catalogue: Catalogue }) {
+  const steps = [
+    {
+      art: "layerCake" as const,
+      title: "Pick from the menu",
+      body: "Build a basket here. Add a sauce, add a note, check out in a minute. No account needed.",
+    },
+    {
+      art: "whisk" as const,
+      title: "We confirm on WhatsApp",
+      body: "Nothing is charged online. We call to confirm, send you the JazzCash or bank details, and get baking once it lands.",
+    },
+    {
+      art: "shotBox" as const,
+      title: `Delivered across ${site.address.city}`,
+      body: `Baked the day it goes out. LIHA covers ${formatPKR(catalogue.settings.deliverySubsidy)} of the rider fare; the rest is confirmed with you before dispatch.`,
+    },
+  ];
+
+  return (
+    <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
+      <Reveal>
+        <SectionHeading
+          eyebrow="How it works"
+          title="Three steps, one phone call"
+          intro="No card is taken on the site. Here is what happens instead."
+        />
+      </Reveal>
+
+      <ol className="mt-12 grid gap-5 md:grid-cols-3">
+        {steps.map((step, index) => (
+          <Reveal as="li" key={step.title}>
+            <div className="flex h-full flex-col gap-5 rounded-blob border-2 border-wine/10 bg-cream-deep/50 p-7">
+              <div className="flex items-center justify-between">
+                <span className="flex size-12 items-center justify-center rounded-full bg-wine text-cream">
+                  <LineArt art={step.art} className="size-7" strokeWidth={2.4} />
+                </span>
+                <span className="font-display text-3xl font-semibold text-rust/70">
+                  0{index + 1}
+                </span>
+              </div>
+              <div>
+                <h3 className="font-display text-xl font-semibold text-wine">{step.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink-soft">{step.body}</p>
+              </div>
+            </div>
+          </Reveal>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/**
+ * The person behind the shop.
+ *
+ * "Trained in Dubai" is the site's whole claim, and until now nothing on it
+ * had a face. The portrait is a placeholder for the moment — a frame that is
+ * the right size and in the right place, so the photograph drops in with no
+ * layout change when it arrives. The copy is hers already, from the About page.
+ */
+function MeetTheBaker() {
+  return (
+    <section className="bg-wine-soft/60 px-5 py-24 sm:px-8">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
+        <Reveal className="mx-auto w-full max-w-sm lg:max-w-none">
+          <div className="relative">
+            <PhotoPlaceholder label="Her portrait, coming soon" art="whisk" />
+            <div className="absolute -bottom-4 -right-2 rotate-3 rounded-full bg-butter px-5 py-3 text-center shadow-sm sm:-right-5">
+              <p className="font-display text-sm font-semibold leading-tight text-ink">
+                {site.credentials.formerly}
+              </p>
+            </div>
+          </div>
+        </Reveal>
+
+        <Reveal>
+          <SectionHeading
+            eyebrow="The baker"
+            title={
+              <>
+                One pastry chef.
+                <br />
+                Every single bake.
+              </>
+            }
+            intro="LIHA is one person. She spent years on the pastry sections of five-star resorts in the UAE — the kind of kitchen where a dessert leaves the pass a hundred times a night and has to be identical every time."
+          />
+          <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
+            That is the standard the bakeshop runs on now, out of {site.address.locality}.
+            Everything is baked to order rather than made ahead and frozen, which is why the menu
+            is deliberately short and why custom cakes need a few days.
+          </p>
+
+          <dl className="mt-10 grid gap-6 sm:grid-cols-3">
+            {[
+              { label: "Trained", value: site.credentials.formerly },
+              { label: "Based", value: `${site.address.locality}, ${site.address.city}` },
+              {
+                label: "Rated",
+                value: `${site.foodpanda.rating}★ · ${site.foodpanda.reviewCount} reviews`,
+              },
+            ].map((stat) => (
+              <div key={stat.label} className="border-l-2 border-rust/40 pl-4">
+                <dt className="text-xs font-semibold uppercase tracking-[0.2em] text-rust">
+                  {stat.label}
+                </dt>
+                <dd className="font-display mt-1 text-lg font-semibold leading-snug text-wine">
+                  {stat.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+
+          <div className="mt-10 flex flex-wrap gap-3">
+            <ButtonLink href="/about" variant="wine">
+              Read her story
+            </ButtonLink>
+            <ButtonLink href={site.instagram.url} external variant="outline">
+              <InstagramIcon className="size-4" />
+              {site.instagram.handle}
+            </ButtonLink>
+          </div>
+        </Reveal>
       </div>
     </section>
   );
